@@ -287,30 +287,50 @@ function Hero() {
   );
 }
 
-/* ── Features grid ────────────────────────────────────────────────── */
+/* ── Features — horizontal scroll carousel on mobile, 3-col grid on desktop ── */
 function Features() {
   return (
-    <section id="features" className="mx-auto max-w-6xl px-4 py-16 md:py-20">
-      <div className="mx-auto mb-12 max-w-2xl text-center">
-        <div className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-primary">
-          <Sparkles className="h-4 w-4" /> Platform capabilities
+    <section id="features" className="py-16 md:py-20">
+      {/* Section header — full-width padded */}
+      <div className="mx-auto max-w-6xl px-4">
+        <div className="mx-auto mb-10 max-w-2xl text-center">
+          <div className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-primary">
+            <Sparkles className="h-4 w-4" /> Platform capabilities
+          </div>
+          <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
+            Built to trade. Not just analyse.
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            Every feature is designed around one goal — removing friction between
+            a confirmed signal and a live executed position.
+          </p>
         </div>
-        <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
-          Built to trade. Not just analyse.
-        </h2>
-        <p className="mt-3 text-muted-foreground">
-          Every feature is designed around one goal — removing friction between
-          a confirmed signal and a live executed position.
-        </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/*
+        Mobile: full-bleed horizontal snap scroll — cards peek ~1 rem on the right
+        so users know they can swipe. Padding-left aligns with the page gutters.
+        Desktop (md+): reverts to a standard 3-column grid inside max-w-6xl.
+      */}
+      <div
+        className="
+          flex gap-4 overflow-x-auto px-4
+          snap-x snap-mandatory
+          md:mx-auto md:grid md:max-w-6xl md:grid-cols-3 md:overflow-visible
+        "
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
         {FEATURES.map((f) => {
           const Icon = f.icon;
           return (
             <article
               key={f.title}
-              className={`group rounded-2xl border p-6 shadow-card transition hover:-translate-y-0.5 ${f.bg}`}
+              className={`
+                snap-start shrink-0 w-[80vw] max-w-[300px]
+                md:w-auto md:max-w-none md:shrink
+                rounded-2xl border p-6 shadow-card
+                transition hover:-translate-y-0.5 ${f.bg}
+              `}
             >
               <div className={`mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl border ${f.bg}`}>
                 <Icon className={`h-5 w-5 ${f.color}`} />
@@ -320,7 +340,14 @@ function Features() {
             </article>
           );
         })}
+        {/* Trailing spacer so the last card doesn't sit flush with the edge */}
+        <div className="w-4 shrink-0 md:hidden" aria-hidden="true" />
       </div>
+
+      {/* Swipe hint — only visible on mobile */}
+      <p className="mt-3 text-center text-[11px] text-muted-foreground md:hidden">
+        ← swipe to explore →
+      </p>
     </section>
   );
 }
