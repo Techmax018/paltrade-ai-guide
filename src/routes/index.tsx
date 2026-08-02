@@ -237,45 +237,78 @@ function Ticker() {
 /* ── Hero ─────────────────────────────────────────────────────────── */
 function Hero() {
   return (
-    <section id="top" className="bg-hero border-b border-border/60">
-      <div className="mx-auto max-w-6xl px-4 py-16 md:py-24">
+    <section
+      id="top"
+      className="relative overflow-hidden border-b border-border/60"
+      style={{
+        backgroundImage: [
+          /* dark gradient over the photo so text stays readable */
+          "linear-gradient(to bottom, oklch(0.14 0.02 260 / 0.80) 0%, oklch(0.14 0.02 260 / 0.65) 40%, oklch(0.14 0.02 260 / 0.95) 100%)",
+          "url(/og-home.jpg)",
+        ].join(", "),
+        backgroundSize: "cover",
+        backgroundPosition: "center 30%",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
+      {/* Radial glow accents */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: [
+            "radial-gradient(ellipse 80% 50% at 50% -10%, oklch(0.82 0.17 85 / 0.20) 0%, transparent 70%)",
+            "radial-gradient(ellipse 50% 40% at 80% 80%, oklch(0.72 0.15 162 / 0.12) 0%, transparent 60%)",
+            "radial-gradient(ellipse 40% 30% at 10% 60%, oklch(0.74 0.13 205 / 0.10) 0%, transparent 55%)",
+          ].join(", "),
+        }}
+      />
+
+      <div className="relative mx-auto max-w-6xl px-4 py-20 md:py-28">
         <div className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-signal/30 bg-signal/10 px-3 py-1 text-xs font-medium text-signal">
+          <div className="inline-flex items-center gap-2 rounded-full border border-signal/40 bg-signal/10 px-3 py-1 text-xs font-medium text-signal backdrop-blur-sm">
             <span className="h-1.5 w-1.5 animate-ping rounded-full bg-signal" />
             Live Deriv WebSocket · Real-time execution
           </div>
 
-          <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
+          <h1 className="mt-6 text-4xl font-bold tracking-tight drop-shadow-lg sm:text-5xl md:text-6xl">
             Let AI trade for you —{" "}
             <span className="text-primary">autonomously.</span>
           </h1>
 
-          <p className="mt-5 text-lg text-muted-foreground md:text-xl">
+          <p className="mt-5 text-lg text-muted-foreground drop-shadow md:text-xl">
             PalTrade's Auto-Pilot engine scans live markets, detects high-confidence
             confluences, and executes Deriv positions automatically — with full risk control
             and a real-time audit trail.
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link to="/terminal"
-              className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-glow transition hover:brightness-110">
+            <Link
+              to="/terminal"
+              className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-glow transition hover:brightness-110"
+            >
               <Zap className="h-4 w-4" /> Open Trading Terminal
             </Link>
-            <a href="#features"
-              className="flex items-center gap-2 rounded-xl border border-border bg-card/60 px-6 py-3 text-sm font-semibold transition hover:bg-card">
+            <a
+              href="#features"
+              className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold backdrop-blur-sm transition hover:bg-white/10"
+            >
               How it works <ChevronRight className="h-4 w-4" />
             </a>
           </div>
 
           {/* Stats row */}
-          <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
-              { value: "7",     label: "Confluence gates" },
+              { value: "7",      label: "Confluence gates" },
               { value: "2-step", label: "Deriv execution" },
-              { value: "3×",    label: "Triple-trade mode" },
-              { value: "24/7",  label: "Auto-pilot scan" },
+              { value: "3×",     label: "Triple-trade mode" },
+              { value: "24/7",   label: "Auto-pilot scan" },
             ].map((s) => (
-              <div key={s.label} className="rounded-xl border border-border bg-card/60 p-4 text-center shadow-card">
+              <div
+                key={s.label}
+                className="rounded-xl border border-white/10 bg-white/5 p-4 text-center shadow-card backdrop-blur-sm"
+              >
                 <div className="font-mono text-2xl font-bold text-primary">{s.value}</div>
                 <div className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">{s.label}</div>
               </div>
@@ -287,11 +320,63 @@ function Hero() {
   );
 }
 
-/* ── Features — horizontal scroll carousel on mobile, 3-col grid on desktop ── */
+/* ── Features — auto-scrolling carousel on mobile, 3-col grid on desktop ── */
 function Features() {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pausedRef = useRef(false);
+
+  // Auto-scroll: advance one card width every 3 s, loop back to start
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+
+    // Only auto-scroll on narrow viewports (mobile / tablet)
+    if (window.innerWidth >= 768) return;
+
+    function advance() {
+      if (!el || pausedRef.current) return;
+      const cardW = el.querySelector("article")?.getBoundingClientRect().width ?? 0;
+      const gap = 16; // gap-4
+      const step = cardW + gap;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+
+      if (el.scrollLeft >= maxScroll - 4) {
+        // reached the end — snap back to start smoothly
+        el.scrollTo({ left: 0, behavior: "smooth" });
+      } else {
+        el.scrollBy({ left: step, behavior: "smooth" });
+      }
+    }
+
+    timerRef.current = setInterval(advance, 3000);
+
+    // Pause on touch / mouse interaction
+    function pause() { pausedRef.current = true; }
+    function resume() {
+      pausedRef.current = false;
+      // restart timer so the next advance is 3 s after the user lifts their finger
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(advance, 3000);
+    }
+
+    el.addEventListener("touchstart", pause, { passive: true });
+    el.addEventListener("touchend", resume, { passive: true });
+    el.addEventListener("mouseenter", pause);
+    el.addEventListener("mouseleave", resume);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      el.removeEventListener("touchstart", pause);
+      el.removeEventListener("touchend", resume);
+      el.removeEventListener("mouseenter", pause);
+      el.removeEventListener("mouseleave", resume);
+    };
+  }, []);
+
   return (
     <section id="features" className="py-16 md:py-20">
-      {/* Section header — full-width padded */}
+      {/* Section header */}
       <div className="mx-auto max-w-6xl px-4">
         <div className="mx-auto mb-10 max-w-2xl text-center">
           <div className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-primary">
@@ -301,24 +386,21 @@ function Features() {
             Built to trade. Not just analyse.
           </h2>
           <p className="mt-3 text-muted-foreground">
-            Every feature is designed around one goal — removing friction between
+            Every feature designed around one goal — removing friction between
             a confirmed signal and a live executed position.
           </p>
         </div>
       </div>
 
-      {/*
-        Mobile: full-bleed horizontal snap scroll — cards peek ~1 rem on the right
-        so users know they can swipe. Padding-left aligns with the page gutters.
-        Desktop (md+): reverts to a standard 3-column grid inside max-w-6xl.
-      */}
+      {/* Mobile: horizontal snap-scroll auto-advancing carousel.
+          Desktop (md+): standard 3-col grid, no scroll. */}
       <div
+        ref={trackRef}
         className="
           flex gap-4 overflow-x-auto px-4
           snap-x snap-mandatory
           md:mx-auto md:grid md:max-w-6xl md:grid-cols-3 md:overflow-visible
         "
-        style={{ WebkitOverflowScrolling: "touch" }}
       >
         {FEATURES.map((f) => {
           const Icon = f.icon;
@@ -326,7 +408,7 @@ function Features() {
             <article
               key={f.title}
               className={`
-                snap-start shrink-0 w-[80vw] max-w-[300px]
+                snap-start shrink-0 w-[82vw] max-w-[300px]
                 md:w-auto md:max-w-none md:shrink
                 rounded-2xl border p-6 shadow-card
                 transition hover:-translate-y-0.5 ${f.bg}
@@ -340,15 +422,58 @@ function Features() {
             </article>
           );
         })}
-        {/* Trailing spacer so the last card doesn't sit flush with the edge */}
+        {/* Trailing spacer prevents last card flush against edge */}
         <div className="w-4 shrink-0 md:hidden" aria-hidden="true" />
       </div>
 
-      {/* Swipe hint — only visible on mobile */}
-      <p className="mt-3 text-center text-[11px] text-muted-foreground md:hidden">
-        ← swipe to explore →
-      </p>
+      {/* Dot indicators — mobile only */}
+      <DotsIndicator trackRef={trackRef} count={FEATURES.length} />
     </section>
+  );
+}
+
+/* Dot position indicator that lights up the active card */
+function DotsIndicator({
+  trackRef,
+  count,
+}: {
+  trackRef: React.RefObject<HTMLDivElement | null>;
+  count: number;
+}) {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    function onScroll() {
+      if (!el) return;
+      const cardW = el.querySelector("article")?.getBoundingClientRect().width ?? 1;
+      const gap = 16;
+      const idx = Math.round(el.scrollLeft / (cardW + gap));
+      setActive(Math.min(idx, count - 1));
+    }
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [trackRef, count]);
+
+  return (
+    <div className="mt-4 flex justify-center gap-1.5 md:hidden">
+      {Array.from({ length: count }).map((_, i) => (
+        <button
+          key={i}
+          aria-label={`Go to feature ${i + 1}`}
+          onClick={() => {
+            const el = trackRef.current;
+            if (!el) return;
+            const cardW = el.querySelector("article")?.getBoundingClientRect().width ?? 0;
+            el.scrollTo({ left: i * (cardW + 16), behavior: "smooth" });
+          }}
+          className={`h-1.5 rounded-full transition-all ${
+            i === active ? "w-5 bg-primary" : "w-1.5 bg-muted-foreground/30"
+          }`}
+        />
+      ))}
+    </div>
   );
 }
 
