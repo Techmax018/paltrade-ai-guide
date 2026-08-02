@@ -1,4 +1,4 @@
-import { AlertOctagon, History, X } from "lucide-react";
+import { AlertOctagon, CheckCircle2, History, X, XCircle } from "lucide-react";
 import type { DerivSymbol } from "@/lib/derivApi";
 
 export interface Position {
@@ -133,14 +133,39 @@ export function PositionsTable({
         </div>
         <div className="mt-2 max-h-52 overflow-y-auto">
           <table className="w-full min-w-[560px] text-left text-xs">
+            <thead className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="py-1.5">Status</th>
+                <th>Symbol</th>
+                <th>Side</th>
+                <th>Lots</th>
+                <th>Entry → Exit</th>
+                <th>P&L</th>
+                <th>Time</th>
+              </tr>
+            </thead>
             <tbody className="font-mono">
               {history.length === 0 && (
                 <tr>
-                  <td className="py-4 text-center font-sans text-muted-foreground">No closed trades yet.</td>
+                  <td colSpan={7} className="py-4 text-center font-sans text-muted-foreground">No closed trades yet.</td>
                 </tr>
               )}
               {history.map((h) => (
                 <tr key={h.id} className="border-t border-border/40">
+                  <td className="py-2 pr-2">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="inline-flex w-fit items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        CLOSED
+                      </span>
+                      {h.pnl >= 0
+                        ? <span className="inline-flex w-fit items-center gap-1 rounded-md border border-profit/30 bg-profit/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-profit">
+                            <CheckCircle2 className="h-2.5 w-2.5" /> WIN
+                          </span>
+                        : <span className="inline-flex w-fit items-center gap-1 rounded-md border border-bear/30 bg-bear/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-bear">
+                            <XCircle className="h-2.5 w-2.5" /> LOSS
+                          </span>}
+                    </div>
+                  </td>
                   <td className="py-2">{h.symbolLabel}</td>
                   <td className={h.side === "BUY" ? "text-profit" : "text-bear"}>{h.side}</td>
                   <td>{h.lots.toFixed(2)}</td>

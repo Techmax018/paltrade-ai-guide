@@ -264,6 +264,32 @@ function Hero() {
         }}
       />
 
+      {/*
+        Glass panel — frosted ellipse centred on the content column.
+        Opaque dark glass at the core, fades to fully transparent at the
+        edges so the background photo remains visible around the border.
+        backdrop-blur softens the photo pixels behind the text area.
+      */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center"
+      >
+        <div
+          className="h-full w-full max-w-3xl"
+          style={{
+            background: [
+              /* core: semi-opaque dark glass */
+              "radial-gradient(ellipse 70% 60% at 50% 50%, oklch(0.14 0.02 260 / 0.62) 0%, oklch(0.14 0.02 260 / 0.28) 55%, transparent 100%)",
+            ].join(", "),
+            backdropFilter: "blur(2px)",
+            WebkitBackdropFilter: "blur(2px)",
+            /* mask the blur effect so it also fades outwards */
+            maskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 100%)",
+            WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 100%)",
+          }}
+        />
+      </div>
+
       <div className="relative mx-auto max-w-6xl px-4 py-20 md:py-28">
         <div className="mx-auto max-w-3xl text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-signal/40 bg-signal/10 px-3 py-1 text-xs font-medium text-signal backdrop-blur-sm">

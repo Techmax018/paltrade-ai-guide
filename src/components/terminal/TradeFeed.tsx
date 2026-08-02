@@ -283,9 +283,20 @@ export function TradeFeed({ symbol, prices, positions, history }: TradeFeedProps
                 {history.map((h) => (
                   <tr key={h.id} className={`border-b border-border/20 ${h.pnl >= 0 ? "hover:bg-profit/5" : "hover:bg-bear/5"}`}>
                     <td className="px-3 py-1">
-                      {h.pnl >= 0
-                        ? <span className="flex items-center gap-1 text-profit"><CheckCircle2 className="h-3 w-3" />WIN</span>
-                        : <span className="flex items-center gap-1 text-bear"><XCircle className="h-3 w-3" />LOSS</span>}
+                      <div className="flex flex-col gap-0.5">
+                        {/* CLOSED tag — always shown */}
+                        <span className="inline-flex w-fit items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          CLOSED
+                        </span>
+                        {/* Outcome badge */}
+                        {h.pnl >= 0
+                          ? <span className="inline-flex w-fit items-center gap-1 rounded-md border border-profit/30 bg-profit/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-profit">
+                              <CheckCircle2 className="h-2.5 w-2.5" /> WIN
+                            </span>
+                          : <span className="inline-flex w-fit items-center gap-1 rounded-md border border-bear/30 bg-bear/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-bear">
+                              <XCircle className="h-2.5 w-2.5" /> LOSS
+                            </span>}
+                      </div>
                     </td>
                     <td className={`px-2 py-1 font-bold ${h.side === "BUY" ? "text-profit" : "text-bear"}`}>{h.side}</td>
                     <td className="px-2 py-1 text-right tabular-nums">{h.entry.toFixed(decimals)}</td>
