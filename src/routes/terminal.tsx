@@ -7,6 +7,14 @@ import { ChartContainer } from "@/components/terminal/ChartContainer";
 import { StrategyPanel, type ExecutionPlan } from "@/components/terminal/StrategyPanel";
 import { PositionsTable, pnlOf, type ClosedTrade, type Position } from "@/components/terminal/PositionsTable";
 import { SettingsModal, type SettingsValues } from "@/components/terminal/SettingsModal";
+import { AutoPilotConfigDrawer } from "@/components/terminal/AutoPilotConfig";
+import { AuditLog } from "@/components/terminal/AuditLog";
+import {
+  useAutonomousEngine,
+  DEFAULT_CONFIG,
+  type AutoPilotConfig,
+  type AutonomousSignal,
+} from "@/hooks/useAutonomousEngine";
 import {
   SYMBOLS,
   connectWebSocket,
@@ -17,6 +25,12 @@ import {
   type Timeframe,
 } from "@/lib/derivApi";
 import { analyzeMarket, type Analysis } from "@/lib/analysis";
+import {
+  playAutoPilotOff,
+  playAutoPilotOn,
+  playExecutionConfirm,
+  playSignalAlert,
+} from "@/lib/audio";
 import { getOrigin } from "@/lib/og";
 
 export const Route = createFileRoute("/terminal")({
@@ -35,7 +49,8 @@ export const Route = createFileRoute("/terminal")({
         { property: "og:title", content: "PalTrade Terminal — Deriv Forex & Synthetic Trading" },
         {
           property: "og:description",
-          content: "Live charts, AI strategy engine, lot size calculator and triple-trade execution in one dark terminal.",
+          content:
+            "Live charts, AI strategy engine, lot size calculator and triple-trade execution in one dark terminal.",
         },
         { property: "og:url", content: "/terminal" },
         { property: "og:image", content: img },
@@ -49,31 +64,63 @@ export const Route = createFileRoute("/terminal")({
 });
 
 function TerminalPage() {
-  const [settings, setSettings] = useState<SettingsValues>({ appId: "", token: "", accountType: "demo" });
+  /* ── API / connection settings ───────────────────────────────────────── */
+  const [settings, setSettings] = useState<SettingsValues>({
+    appId: "",
+    token: "",
+    accountType: "demo",
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [account, setAccount] = useState<AccountInfo | null>(null);
 
+  /* ── Chart / symbol state ────────────────────────────────────────────── */
   const [symbolCode, setSymbolCode] = useState(SYMBOLS[0].code);
   const [timeframe, setTimeframe] = useState<Timeframe>("M5");
   const [candles, setCandles] = useState<Candle[]>([]);
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [overlays, setOverlays] = useState({ fib: true, ema: true, rsi: true });
 
+  /* ── Analysis ────────────────────────────────────────────────────────── */
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [tripleMode, setTripleMode] = useState(false);
 
+  /* ── Trade execution ─────────────────────────────────────────────────── */
+  const [tripleMode, setTripleMode] = useState(false);
+  const [executing, setExecuting] = useState(false);
   const [positions, setPositions] = useState<Position[]>([]);
   const [history, setHistory] = useState<ClosedTrade[]>([]);
 
+  /* ── Auto-Pilot ──────────────────────────────────────────────────────── */
+  const [autoPilot, setAutoPilot] = useState(false);
+  const [autoPilotConfigOpen, setAutoPilotConfigOpen] = useState(false);
+  const [autoPilotConfig, setAutoPilotConfig] = useState<AutoPilotConfig>(DEFAULT_CONFIG);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+
+  /* ── Derived ─────────────────────────────────────────────────────────── */
   const connRef = useRef<DerivConnection | null>(null);
-  const symbol = useMemo(() => SYMBOLS.find((s) => s.code === symbolCode) ?? SYMBOLS[0], [symbolCode]);
+  const symbol = useMemo(
+    () => SYMBOLS.find((s) => s.code === symbolCode) ?? SYMBOLS[0],
+    [symbolCode],
+  );
   const price = prices[symbolCode] ?? candles.at(-1)?.close ?? symbol.basePrice;
 
-  // connect / reconnect
+  /* ── Today's realised loss tracker ──────────────────────────────────── */
+  const todayLoss = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return history
+      .filter((h) => h.closedAt >= todayStart.getTime() && h.pnl < 0)
+      .reduce((acc, h) => acc + Math.abs(h.pnl), 0);
+  }, [history]);
+
+  /* ── WebSocket connect / reconnect ───────────────────────────────────── */
   useEffect(() => {
-    const conn = connectWebSocket({ appId: settings.appId, token: settings.token, accountType: settings.accountType });
+    const conn = connectWebSocket({
+      appId: settings.appId,
+      token: settings.token,
+      accountType: settings.accountType,
+    });
     connRef.current = conn;
     const offStatus = conn.onStatus(setStatus);
     const offAccount = conn.onAccount(setAccount);
@@ -84,7 +131,7 @@ function TerminalPage() {
     };
   }, [settings.appId, settings.token, settings.accountType]);
 
-  // candles
+  /* ── Candle fetch ────────────────────────────────────────────────────── */
   const [seedPrice, setSeedPrice] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -99,7 +146,7 @@ function TerminalPage() {
     };
   }, [symbolCode, timeframe, status]);
 
-  // ticks
+  /* ── Tick subscription ───────────────────────────────────────────────── */
   useEffect(() => {
     const conn = connRef.current;
     if (!conn || status !== "connected" || seedPrice === null) return;
@@ -123,18 +170,28 @@ function TerminalPage() {
     return off;
   }, [symbolCode, status, seedPrice]);
 
-  const closePosition = useCallback((id: string, exitPrice?: number, reason?: string) => {
-    setPositions((cur) => {
-      const p = cur.find((x) => x.id === id);
-      if (!p) return cur;
-      const exit = exitPrice ?? p.entry;
-      setHistory((h) => [{ ...p, exit, pnl: pnlOf(p, exit), closedAt: Date.now() }, ...h].slice(0, 100));
-      if (reason) toast(`${p.label} closed — ${reason}`);
-      return cur.filter((x) => x.id !== id);
-    });
-  }, []);
+  /* ── Position close helper ───────────────────────────────────────────── */
+  const closePosition = useCallback(
+    (id: string, exitPrice?: number, reason?: string) => {
+      setPositions((cur) => {
+        const p = cur.find((x) => x.id === id);
+        if (!p) return cur;
+        const exit = exitPrice ?? p.entry;
+        const closed: ClosedTrade = {
+          ...p,
+          exit,
+          pnl: pnlOf(p, exit),
+          closedAt: Date.now(),
+        };
+        setHistory((h) => [closed, ...h].slice(0, 100));
+        if (reason) toast(`${p.label} closed — ${reason}`);
+        return cur.filter((x) => x.id !== id);
+      });
+    },
+    [],
+  );
 
-  // SL / TP monitor
+  /* ── SL / TP auto-monitor ────────────────────────────────────────────── */
   useEffect(() => {
     positions.forEach((p) => {
       const cur = prices[p.symbol];
@@ -146,6 +203,7 @@ function TerminalPage() {
     });
   }, [prices, positions, closePosition]);
 
+  /* ── Manual analysis trigger ─────────────────────────────────────────── */
   function runAnalysis() {
     if (!candles.length) return;
     setAnalyzing(true);
@@ -155,48 +213,131 @@ function TerminalPage() {
     }, 600);
   }
 
-  async function execute(plan: ExecutionPlan) {
+  /* ── Core execute function (used by both manual and auto-pilot) ──────── */
+  async function execute(
+    plan: ExecutionPlan,
+  ): Promise<{ latencyMs?: number; contractId?: string }> {
     const conn = connRef.current;
     if (!conn || status !== "connected") {
       toast.error("Not connected to Deriv. Check your API settings.");
-      return;
+      return {};
     }
-    const targets = plan.tripleMode ? plan.targets : [plan.targets[Math.min(1, plan.targets.length - 1)]];
-    for (let i = 0; i < targets.length; i++) {
-      const tp = targets[i];
-      const res = await conn.placeTrade({
-        symbol: symbol.code,
-        side: plan.side,
-        lots: plan.lots,
-        entry: price,
-        stopLoss: plan.stopLoss,
-        takeProfit: tp,
-        label: plan.tripleMode ? `TP${i + 1}` : "TP",
-      });
-      if (!res.ok) {
-        toast.error(res.message);
-        continue;
-      }
-      setPositions((cur) => [
-        ...cur,
-        {
-          id: res.id,
+
+    setExecuting(true);
+    const targets = plan.tripleMode
+      ? plan.targets
+      : [plan.targets[Math.min(1, plan.targets.length - 1)]];
+
+    let lastLatency: number | undefined;
+    let lastContractId: string | undefined;
+
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        const tp = targets[i];
+        const res = await conn.placeTrade({
           symbol: symbol.code,
-          symbolLabel: symbol.label,
           side: plan.side,
           lots: plan.lots,
           entry: price,
           stopLoss: plan.stopLoss,
           takeProfit: tp,
           label: plan.tripleMode ? `TP${i + 1}` : "TP",
-          openedAt: res.openedAt,
-          pipSize: symbol.pipSize,
-          pipValuePerLot: symbol.pipValuePerLot,
-        },
-      ]);
+        });
+
+        if (!res.ok) {
+          toast.error(res.message);
+          continue;
+        }
+
+        lastLatency = res.latencyMs;
+        lastContractId = res.contractId;
+
+        setPositions((cur) => [
+          ...cur,
+          {
+            id: res.id,
+            symbol: symbol.code,
+            symbolLabel: symbol.label,
+            side: plan.side,
+            lots: plan.lots,
+            entry: price,
+            stopLoss: plan.stopLoss,
+            takeProfit: tp,
+            label: plan.tripleMode ? `TP${i + 1}` : "TP",
+            openedAt: res.openedAt,
+            pipSize: symbol.pipSize,
+            pipValuePerLot: symbol.pipValuePerLot,
+          },
+        ]);
+
+        // Subscribe to live P&L stream for this contract
+        if (res.contractId) {
+          conn.subscribeOpenContract(res.contractId, (update) => {
+            if (update.status === "won") {
+              closePosition(res.id, update.currentSpot, "take profit hit");
+            } else if (update.status === "lost") {
+              closePosition(res.id, update.currentSpot, "stop loss hit");
+            }
+          });
+        }
+      }
+
+      if (audioEnabled) playExecutionConfirm();
+      toast.success(
+        `${plan.side} ${plan.lots.toFixed(2)} ${symbol.label}${plan.tripleMode ? " · triple-trade" : ""} executed${lastLatency ? ` (${lastLatency}ms)` : ""}`,
+      );
+    } finally {
+      setExecuting(false);
     }
-    toast.success(`${plan.side} ${plan.lots.toFixed(2)} ${symbol.label}${plan.tripleMode ? " · triple-trade" : ""} executed`);
+
+    return { latencyMs: lastLatency, contractId: lastContractId };
   }
+
+  /* ── Auto-Pilot toggle handler (with audio) ──────────────────────────── */
+  function handleToggleAutoPilot(next: boolean) {
+    setAutoPilot(next);
+    if (audioEnabled) {
+      if (next) {
+        playAutoPilotOn();
+        toast.success("Auto-Pilot ACTIVATED — engine scanning for confluences");
+      } else {
+        playAutoPilotOff();
+        toast("Auto-Pilot STANDBY — returning to manual mode");
+      }
+    }
+  }
+
+  /* ── Autonomous engine ───────────────────────────────────────────────── */
+  const engine = useAutonomousEngine({
+    autoPilot,
+    config: autoPilotConfig,
+    symbol,
+    candles,
+    price,
+    positions,
+    connection: connRef.current,
+    todayLoss,
+    onExecute: async (plan, _signal) => {
+      return execute(plan);
+    },
+    onSignalDetected: (signal: AutonomousSignal) => {
+      if (!audioEnabled) return;
+      if (signal.autoExecuted) {
+        playExecutionConfirm();
+      } else if (signal.outcome === "SKIPPED") {
+        playSignalAlert("BLOCK");
+      } else {
+        playSignalAlert(signal.side);
+      }
+    },
+  });
+
+  /* ── Sync engine's latest analysis into the panel analysis state ─────── */
+  useEffect(() => {
+    if (engine.latestAnalysis && !analysis) {
+      setAnalysis(engine.latestAnalysis);
+    }
+  }, [engine.latestAnalysis, analysis]);
 
   function closeAll() {
     positions.forEach((p) => closePosition(p.id, prices[p.symbol] ?? p.entry));
@@ -206,11 +347,23 @@ function TerminalPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Toaster />
-      <TerminalHeader status={status} account={account} onOpenSettings={() => setSettingsOpen(true)} />
+
+      {/* ── Header with Auto-Pilot controls ──────────────────────────────── */}
+      <TerminalHeader
+        status={status}
+        account={account}
+        autoPilot={autoPilot}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onToggleAutoPilot={handleToggleAutoPilot}
+        onOpenAutoPilotConfig={() => setAutoPilotConfigOpen(true)}
+      />
 
       <main className="mx-auto grid max-w-[1600px] gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <h1 className="sr-only">PalTrade Deriv trading terminal for forex and synthetic indices</h1>
+        <h1 className="sr-only">
+          PalTrade Deriv trading terminal for forex and synthetic indices
+        </h1>
 
+        {/* ── Left column ────────────────────────────────────────────────── */}
         <div className="space-y-4">
           <ChartContainer
             candles={candles}
@@ -224,6 +377,7 @@ function TerminalPage() {
             onTimeframeChange={setTimeframe}
             onToggle={(k) => setOverlays((o) => ({ ...o, [k]: !o[k] }))}
           />
+
           <PositionsTable
             positions={positions}
             history={history}
@@ -232,21 +386,35 @@ function TerminalPage() {
             onClose={(id) => closePosition(id, prices[symbolCode])}
             onCloseAll={closeAll}
           />
+
+          {/* ── Audit log — full width below positions ────────────────────── */}
+          <AuditLog
+            signals={engine.signalFeed}
+            stats={engine.stats}
+            onClear={engine.clearFeed}
+          />
         </div>
 
+        {/* ── Right column — strategy & AI panel ───────────────────────── */}
         <StrategyPanel
           symbol={symbol}
           price={price}
           balance={account?.balance ?? 10000}
-          analysis={analysis}
+          analysis={analysis ?? engine.latestAnalysis}
           analyzing={analyzing}
           tripleMode={tripleMode}
+          executing={executing}
           onToggleTriple={setTripleMode}
-          onAnalyze={runAnalysis}
+          onAnalyze={() => {
+            runAnalysis();
+            // Also trigger the engine scanner so its analysis stays in sync
+            engine.triggerScan();
+          }}
           onExecute={execute}
         />
       </main>
 
+      {/* ── Modals / drawers ─────────────────────────────────────────────── */}
       <SettingsModal
         open={settingsOpen}
         values={settings}
@@ -255,6 +423,16 @@ function TerminalPage() {
           setSettings(v);
           setSettingsOpen(false);
           toast.success("Settings saved — reconnecting to Deriv");
+        }}
+      />
+
+      <AutoPilotConfigDrawer
+        open={autoPilotConfigOpen}
+        config={autoPilotConfig}
+        onClose={() => setAutoPilotConfigOpen(false)}
+        onSave={(cfg) => {
+          setAutoPilotConfig(cfg);
+          toast.success("Auto-Pilot configuration updated");
         }}
       />
     </div>

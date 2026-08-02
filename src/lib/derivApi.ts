@@ -6,6 +6,12 @@
  * Replace `DERIV_APP_ID` (or pass appId at connect time) and flip
  * `USE_MOCK` to false once you're ready to hit the live endpoint.
  * Live endpoint: wss://ws.derivws.com/websockets/v3?app_id=<APP_ID>
+ *
+ * Execution flow (live):
+ *   1. authorize  → exchange token for session
+ *   2. proposal   → request contract quote
+ *   3. buy        → execute with proposal id + price
+ *   4. proposal_open_contract → stream real-time P&L
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -17,6 +23,7 @@ export type ConnectionStatus = "disconnected" | "connecting" | "reconnecting" | 
 export type AccountType = "demo" | "real";
 export type Timeframe = "M1" | "M5" | "M15" | "H1";
 export type Side = "BUY" | "SELL";
+export type ContractType = "CALL" | "PUT"; // Deriv Rise/Fall
 
 export interface DerivSymbol {
   code: string;
@@ -79,6 +86,43 @@ export interface TradeResult {
   message: string;
   request: TradeRequest;
   openedAt: number;
+  /** Execution latency in ms (proposal → buy round-trip) */
+  latencyMs?: number;
+  /** Deriv contract ID if live */
+  contractId?: string;
+}
+
+/**
+ * ProposalRequest — maps to the Deriv `proposal` WebSocket message.
+ * https://api.deriv.com/api-explorer/#proposal
+ */
+export interface ProposalRequest {
+  symbol: string;
+  contractType: ContractType;
+  stake: number; // USD amount
+  duration: number; // e.g. 5
+  durationUnit: "t" | "s" | "m" | "h" | "d";
+  currency?: string;
+  basis?: "stake" | "payout";
+}
+
+export interface ProposalResponse {
+  id: string; // proposal id
+  askPrice: number;
+  displayValue: string;
+  payout: number;
+  longcode: string;
+}
+
+/**
+ * OpenContractUpdate — streamed by `proposal_open_contract`.
+ */
+export interface OpenContractUpdate {
+  contractId: string;
+  currentSpot: number;
+  entrySpot: number;
+  profit: number;
+  status: "open" | "won" | "lost" | "sold";
 }
 
 export interface ConnectOptions {
@@ -92,7 +136,21 @@ export interface DerivConnection {
   onAccount(cb: (a: AccountInfo) => void): () => void;
   subscribeTicks(symbol: string, cb: (t: Tick) => void, startPrice?: number): () => void;
   getCandles(symbol: string, timeframe: Timeframe, count: number): Promise<Candle[]>;
+  /**
+   * 2-step execution: proposal → buy.
+   * Returns timing metadata alongside the fill result.
+   */
   placeTrade(req: TradeRequest): Promise<TradeResult>;
+  /**
+   * Request a contract quote without executing.
+   * Useful for pre-flight validation and price display.
+   */
+  requestProposal(req: ProposalRequest): Promise<ProposalResponse>;
+  /**
+   * Subscribe to live P&L updates for an open contract.
+   * Returns an unsubscribe function.
+   */
+  subscribeOpenContract(contractId: string, cb: (u: OpenContractUpdate) => void): () => void;
   closeTrade(id: string): Promise<{ ok: boolean }>;
   disconnect(): void;
 }
@@ -144,6 +202,7 @@ class MockDerivConnection implements DerivConnection {
   private statusCbs = new Set<(s: ConnectionStatus) => void>();
   private accountCbs = new Set<(a: AccountInfo) => void>();
   private timers: ReturnType<typeof setInterval>[] = [];
+  private contractCbs = new Map<string, Set<(u: OpenContractUpdate) => void>>();
   private status: ConnectionStatus = "connecting";
   private account: AccountInfo;
   private prices = new Map<string, number>();
@@ -199,6 +258,18 @@ class MockDerivConnection implements DerivConnection {
       const next = last + (Math.random() - 0.5) * meta.basePrice * 0.0004 * meta.volatility;
       this.prices.set(symbol, next);
       cb({ symbol, time: Math.floor(Date.now() / 1000), quote: next });
+      // stream open contract updates
+      this.contractCbs.forEach((cbs, contractId) => {
+        cbs.forEach((update) =>
+          update({
+            contractId,
+            currentSpot: next,
+            entrySpot: next + (Math.random() - 0.5) * meta.pipSize * 5,
+            profit: (Math.random() - 0.45) * 10,
+            status: "open",
+          }),
+        );
+      });
     }, 1000);
     this.timers.push(id);
     return () => clearInterval(id);
@@ -209,14 +280,56 @@ class MockDerivConnection implements DerivConnection {
     return generateCandles(symbol, timeframe, count);
   }
 
-  async placeTrade(req: TradeRequest): Promise<TradeResult> {
-    await new Promise((r) => setTimeout(r, 350));
+  async requestProposal(req: ProposalRequest): Promise<ProposalResponse> {
+    // Simulate ~180ms round-trip for proposal
+    await new Promise((r) => setTimeout(r, 180));
+    const payout = req.stake * (1.8 + Math.random() * 0.4);
     return {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: `prop-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      askPrice: req.stake,
+      displayValue: req.stake.toFixed(2),
+      payout,
+      longcode: `Win payout if ${req.symbol} ${req.contractType === "CALL" ? "rises" : "falls"} after ${req.duration}${req.durationUnit}`,
+    };
+  }
+
+  async placeTrade(req: TradeRequest): Promise<TradeResult> {
+    const t0 = performance.now();
+    // Step 1: proposal (simulated ~180ms)
+    const contractType: ContractType = req.side === "BUY" ? "CALL" : "PUT";
+    const _proposal = await this.requestProposal({
+      symbol: req.symbol,
+      contractType,
+      stake: req.lots * 100,
+      duration: 5,
+      durationUnit: "m",
+    });
+    // Step 2: buy (simulated ~120ms)
+    await new Promise((r) => setTimeout(r, 120));
+    const contractId = `contract-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const latencyMs = Math.round(performance.now() - t0);
+    return {
+      id: contractId,
       ok: true,
       message: `${req.side} ${req.lots.toFixed(2)} ${req.symbol} filled at ${req.entry}`,
       request: req,
       openedAt: Date.now(),
+      latencyMs,
+      contractId,
+    };
+  }
+
+  subscribeOpenContract(contractId: string, cb: (u: OpenContractUpdate) => void) {
+    if (!this.contractCbs.has(contractId)) {
+      this.contractCbs.set(contractId, new Set());
+    }
+    this.contractCbs.get(contractId)!.add(cb);
+    return () => {
+      const set = this.contractCbs.get(contractId);
+      if (set) {
+        set.delete(cb);
+        if (!set.size) this.contractCbs.delete(contractId);
+      }
     };
   }
 
@@ -228,21 +341,240 @@ class MockDerivConnection implements DerivConnection {
   disconnect() {
     this.timers.forEach(clearInterval);
     this.timers = [];
+    this.contractCbs.clear();
     this.setStatus("disconnected");
+  }
+}
+
+/* ── live WebSocket connection ─────────────────────────────────────────────── */
+class LiveDerivConnection implements DerivConnection {
+  private ws: WebSocket;
+  private statusCbs = new Set<(s: ConnectionStatus) => void>();
+  private accountCbs = new Set<(a: AccountInfo) => void>();
+  private pendingRequests = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>();
+  private tickCbs = new Map<string, Set<(t: Tick) => void>>();
+  private contractCbs = new Map<string, Set<(u: OpenContractUpdate) => void>>();
+  private reqId = 1;
+  private account: AccountInfo | null = null;
+  private opts: ConnectOptions;
+
+  constructor(opts: ConnectOptions) {
+    this.opts = opts;
+    this.setStatus("connecting");
+    this.ws = new WebSocket(`${DERIV_WS_ENDPOINT}?app_id=${opts.appId}`);
+    this.ws.onopen = () => {
+      this.setStatus("connecting");
+      this.send({ authorize: opts.token });
+    };
+    this.ws.onmessage = (e) => this.handleMessage(JSON.parse(e.data));
+    this.ws.onerror = () => this.setStatus("error");
+    this.ws.onclose = () => this.setStatus("disconnected");
+  }
+
+  private nextId() {
+    return this.reqId++;
+  }
+
+  private send(payload: Record<string, unknown>) {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(payload));
+    }
+  }
+
+  private sendReq(payload: Record<string, unknown>): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const id = this.nextId();
+      this.pendingRequests.set(id, { resolve, reject });
+      this.send({ ...payload, req_id: id });
+      // timeout after 15s
+      setTimeout(() => {
+        if (this.pendingRequests.has(id)) {
+          this.pendingRequests.delete(id);
+          reject(new Error("Deriv API request timed out"));
+        }
+      }, 15000);
+    });
+  }
+
+  private setStatus(s: ConnectionStatus) {
+    this.statusCbs.forEach((cb) => cb(s));
+  }
+
+  private handleMessage(msg: Record<string, unknown>) {
+    const reqId = msg.req_id as number | undefined;
+    if (reqId !== undefined && this.pendingRequests.has(reqId)) {
+      const { resolve, reject } = this.pendingRequests.get(reqId)!;
+      this.pendingRequests.delete(reqId);
+      if (msg.error) reject(new Error((msg.error as { message: string }).message));
+      else resolve(msg);
+      return;
+    }
+    const msgType = msg.msg_type as string;
+    if (msgType === "authorize") {
+      const auth = msg.authorize as Record<string, unknown>;
+      this.setStatus("connected");
+      this.account = {
+        loginid: auth.loginid as string,
+        accountType: this.opts.accountType,
+        currency: (auth.currency as string) ?? "USD",
+        balance: auth.balance as number,
+        equity: auth.balance as number,
+        leverage: 100,
+      };
+      this.accountCbs.forEach((cb) => cb(this.account!));
+    }
+    if (msgType === "tick") {
+      const tick = msg.tick as Record<string, unknown>;
+      const t: Tick = { symbol: tick.symbol as string, time: tick.epoch as number, quote: tick.quote as number };
+      this.tickCbs.get(t.symbol)?.forEach((cb) => cb(t));
+    }
+    if (msgType === "proposal_open_contract") {
+      const poc = msg.proposal_open_contract as Record<string, unknown>;
+      const id = String(poc.contract_id);
+      const update: OpenContractUpdate = {
+        contractId: id,
+        currentSpot: poc.current_spot as number,
+        entrySpot: poc.entry_spot as number,
+        profit: poc.profit as number,
+        status: poc.status as OpenContractUpdate["status"],
+      };
+      this.contractCbs.get(id)?.forEach((cb) => cb(update));
+    }
+  }
+
+  onStatus(cb: (s: ConnectionStatus) => void) {
+    this.statusCbs.add(cb);
+    return () => this.statusCbs.delete(cb) as unknown as void;
+  }
+  onAccount(cb: (a: AccountInfo) => void) {
+    this.accountCbs.add(cb);
+    if (this.account) cb(this.account);
+    return () => this.accountCbs.delete(cb) as unknown as void;
+  }
+
+  subscribeTicks(symbol: string, cb: (t: Tick) => void) {
+    if (!this.tickCbs.has(symbol)) {
+      this.tickCbs.set(symbol, new Set());
+      this.send({ ticks: symbol, subscribe: 1 });
+    }
+    this.tickCbs.get(symbol)!.add(cb);
+    return () => {
+      const set = this.tickCbs.get(symbol);
+      if (set) {
+        set.delete(cb);
+        if (!set.size) {
+          this.tickCbs.delete(symbol);
+          this.send({ forget_all: "ticks" });
+        }
+      }
+    };
+  }
+
+  async getCandles(symbol: string, timeframe: Timeframe, count: number): Promise<Candle[]> {
+    const granularity = TIMEFRAME_SECONDS[timeframe];
+    const res = await this.sendReq({
+      ticks_history: symbol,
+      adjust_start_time: 1,
+      count,
+      end: "latest",
+      granularity,
+      style: "candles",
+    });
+    const candles = (res as { candles: Array<{ epoch: number; open: string; high: string; low: string; close: string }> }).candles;
+    return candles.map((c) => ({
+      time: c.epoch,
+      open: parseFloat(c.open),
+      high: parseFloat(c.high),
+      low: parseFloat(c.low),
+      close: parseFloat(c.close),
+    }));
+  }
+
+  async requestProposal(req: ProposalRequest): Promise<ProposalResponse> {
+    const res = (await this.sendReq({
+      proposal: 1,
+      amount: req.stake,
+      basis: req.basis ?? "stake",
+      contract_type: req.contractType,
+      currency: req.currency ?? "USD",
+      duration: req.duration,
+      duration_unit: req.durationUnit,
+      symbol: req.symbol,
+    })) as { proposal: { id: string; ask_price: number; display_value: string; payout: number; longcode: string } };
+    return {
+      id: res.proposal.id,
+      askPrice: res.proposal.ask_price,
+      displayValue: res.proposal.display_value,
+      payout: res.proposal.payout,
+      longcode: res.proposal.longcode,
+    };
+  }
+
+  async placeTrade(req: TradeRequest): Promise<TradeResult> {
+    const t0 = performance.now();
+    const contractType: ContractType = req.side === "BUY" ? "CALL" : "PUT";
+    // Step 1: proposal
+    const proposal = await this.requestProposal({
+      symbol: req.symbol,
+      contractType,
+      stake: req.lots * 100,
+      duration: 5,
+      durationUnit: "m",
+    });
+    // Step 2: buy
+    const buyRes = (await this.sendReq({
+      buy: proposal.id,
+      price: proposal.askPrice,
+    })) as { buy: { contract_id: number; buy_price: number; start_time: number; longcode: string } };
+    const latencyMs = Math.round(performance.now() - t0);
+    const contractId = String(buyRes.buy.contract_id);
+    return {
+      id: contractId,
+      ok: true,
+      message: `${req.side} ${req.lots.toFixed(2)} ${req.symbol} filled at ${req.entry} (${latencyMs}ms)`,
+      request: req,
+      openedAt: buyRes.buy.start_time * 1000,
+      latencyMs,
+      contractId,
+    };
+  }
+
+  subscribeOpenContract(contractId: string, cb: (u: OpenContractUpdate) => void) {
+    if (!this.contractCbs.has(contractId)) {
+      this.contractCbs.set(contractId, new Set());
+      this.send({ proposal_open_contract: 1, contract_id: Number(contractId), subscribe: 1 });
+    }
+    this.contractCbs.get(contractId)!.add(cb);
+    return () => {
+      const set = this.contractCbs.get(contractId);
+      if (set) {
+        set.delete(cb);
+        if (!set.size) this.contractCbs.delete(contractId);
+      }
+    };
+  }
+
+  async closeTrade(id: string) {
+    try {
+      await this.sendReq({ sell: Number(id), price: 0 });
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  }
+
+  disconnect() {
+    this.ws.close();
   }
 }
 
 /**
  * connectWebSocket — returns a live-shaped connection object.
- * When USE_MOCK is false this is where you open the real socket:
- *   const ws = new WebSocket(`${DERIV_WS_ENDPOINT}?app_id=${appId}`)
- *   ws.send(JSON.stringify({ authorize: token }))
- *   ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }))
- *   ws.send(JSON.stringify({ buy: 1, price, parameters: {...} }))
+ * Flip USE_MOCK to false and add DERIV_APP_ID to use the real Deriv socket.
  */
 export function connectWebSocket(opts: ConnectOptions): DerivConnection {
-  if (!USE_MOCK) {
-    throw new Error("Live Deriv socket not wired yet — add your App ID in src/lib/derivApi.ts");
+  if (!USE_MOCK && opts.appId) {
+    return new LiveDerivConnection(opts);
   }
   return new MockDerivConnection(opts);
 }
