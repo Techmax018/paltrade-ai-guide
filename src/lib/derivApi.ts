@@ -16,8 +16,10 @@
  */
 
 export const DERIV_WS_ENDPOINT = "wss://ws.derivws.com/websockets/v3";
-export const DERIV_APP_ID = ""; // <-- insert your Deriv App ID here
-export const USE_MOCK = true; // <-- set to false to use the real socket
+/** Deriv public demo App ID — works without registration for read-only market data */
+export const DERIV_APP_ID = "1089";
+/** false = always use the real Deriv WebSocket (live prices, candles, account on login) */
+export const USE_MOCK = false;
 
 export type ConnectionStatus = "disconnected" | "connecting" | "reconnecting" | "connected" | "error";
 export type AccountType = "demo" | "real";
@@ -364,7 +366,13 @@ class LiveDerivConnection implements DerivConnection {
     this.ws = new WebSocket(`${DERIV_WS_ENDPOINT}?app_id=${opts.appId}`);
     this.ws.onopen = () => {
       this.setStatus("connecting");
-      this.send({ authorize: opts.token });
+      // Only authorize if a token was provided; otherwise just mark connected
+      if (opts.token) {
+        this.send({ authorize: opts.token });
+      } else {
+        // Public market data mode — no account, but prices and candles work
+        this.setStatus("connected");
+      }
     };
     this.ws.onmessage = (e) => this.handleMessage(JSON.parse(e.data));
     this.ws.onerror = () => this.setStatus("error");
@@ -452,7 +460,7 @@ class LiveDerivConnection implements DerivConnection {
     return () => this.accountCbs.delete(cb) as unknown as void;
   }
 
-  subscribeTicks(symbol: string, cb: (t: Tick) => void) {
+  subscribeTicks(symbol: string, cb: (t: Tick) => void, _startPrice?: number) {
     if (!this.tickCbs.has(symbol)) {
       this.tickCbs.set(symbol, new Set());
       this.send({ ticks: symbol, subscribe: 1 });
@@ -472,22 +480,31 @@ class LiveDerivConnection implements DerivConnection {
 
   async getCandles(symbol: string, timeframe: Timeframe, count: number): Promise<Candle[]> {
     const granularity = TIMEFRAME_SECONDS[timeframe];
-    const res = await this.sendReq({
-      ticks_history: symbol,
-      adjust_start_time: 1,
-      count,
-      end: "latest",
-      granularity,
-      style: "candles",
-    });
-    const candles = (res as { candles: Array<{ epoch: number; open: string; high: string; low: string; close: string }> }).candles;
-    return candles.map((c) => ({
-      time: c.epoch,
-      open: parseFloat(c.open),
-      high: parseFloat(c.high),
-      low: parseFloat(c.low),
-      close: parseFloat(c.close),
-    }));
+    try {
+      const res = await this.sendReq({
+        ticks_history: symbol,
+        adjust_start_time: 1,
+        count,
+        end: "latest",
+        granularity,
+        style: "candles",
+      });
+      const r = res as Record<string, unknown>;
+      // Deriv returns candles array for granularity > 0
+      if (r.candles && Array.isArray(r.candles)) {
+        return (r.candles as Array<{ epoch: number; open: string; high: string; low: string; close: string }>).map((c) => ({
+          time: c.epoch,
+          open: parseFloat(c.open),
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
+          close: parseFloat(c.close),
+        }));
+      }
+      return [];
+    } catch {
+      // Fallback to generated candles if this symbol doesn't support history
+      return generateCandles(symbol, timeframe, count);
+    }
   }
 
   async requestProposal(req: ProposalRequest): Promise<ProposalResponse> {
@@ -569,12 +586,22 @@ class LiveDerivConnection implements DerivConnection {
 }
 
 /**
- * connectWebSocket — returns a live-shaped connection object.
- * Flip USE_MOCK to false and add DERIV_APP_ID to use the real Deriv socket.
+ * connectWebSocket — connects to Deriv WebSocket.
+ *
+ * Priority:
+ *  1. If USE_MOCK is true → always use mock (for offline dev)
+ *  2. If opts.appId is provided → use it for live connection
+ *  3. Falls back to the built-in public DERIV_APP_ID (1089) for real market data
+ *     with no account features (no trading, candles + ticks only)
+ *  4. If still no appId → mock
  */
 export function connectWebSocket(opts: ConnectOptions): DerivConnection {
-  if (!USE_MOCK && opts.appId) {
-    return new LiveDerivConnection(opts);
+  if (USE_MOCK) {
+    return new MockDerivConnection(opts);
+  }
+  const appId = opts.appId || DERIV_APP_ID;
+  if (appId) {
+    return new LiveDerivConnection({ ...opts, appId });
   }
   return new MockDerivConnection(opts);
 }

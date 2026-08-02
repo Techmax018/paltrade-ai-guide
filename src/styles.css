@@ -126,3 +126,10 @@
 @utility animate-scan-ping {
   animation: scan-ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
+
+/* ── Hide scrollbar while keeping scroll functionality ───────────────── */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar { display: none; }
+}

@@ -346,7 +346,7 @@ function TerminalPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <Toaster />
 
       {/* ── Header with Auto-Pilot controls ──────────────────────────────── */}
@@ -359,7 +359,7 @@ function TerminalPage() {
         onOpenAutoPilotConfig={() => setAutoPilotConfigOpen(true)}
       />
 
-      <main className="mx-auto grid max-w-[1600px] gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <main className="mx-auto grid w-full max-w-[1600px] gap-4 overflow-x-hidden px-2 py-3 sm:px-4 sm:py-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <h1 className="sr-only">
           PalTrade Deriv trading terminal for forex and synthetic indices
         </h1>
