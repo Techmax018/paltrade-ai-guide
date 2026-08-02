@@ -84,6 +84,15 @@
     -webkit-font-smoothing: antialiased;
   }
   .font-mono { font-family: var(--font-mono); }
+
+  /* ── Global scrollbar hide — keeps scroll, removes the bar ─────── */
+  * {
+    scrollbar-width: none;       /* Firefox */
+    -ms-overflow-style: none;    /* IE / Edge */
+  }
+  *::-webkit-scrollbar {
+    display: none;               /* Chrome / Safari / WebKit */
+  }
 }
 
 @utility bg-hero { background: var(--gradient-hero); }
