@@ -9,6 +9,7 @@ import { PositionsTable, pnlOf, type ClosedTrade, type Position } from "@/compon
 import { SettingsModal, type SettingsValues } from "@/components/terminal/SettingsModal";
 import { AutoPilotConfigDrawer } from "@/components/terminal/AutoPilotConfig";
 import { AuditLog } from "@/components/terminal/AuditLog";
+import { TradeFeed } from "@/components/terminal/TradeFeed";
 import {
   useAutonomousEngine,
   DEFAULT_CONFIG,
@@ -373,9 +374,19 @@ function TerminalPage() {
             showFib={overlays.fib}
             showEma={overlays.ema}
             showRsi={overlays.rsi}
+            positions={positions}
+            prices={prices}
             onSymbolChange={setSymbolCode}
             onTimeframeChange={setTimeframe}
             onToggle={(k) => setOverlays((o) => ({ ...o, [k]: !o[k] }))}
+          />
+
+          {/* ── MT5-style live trade feed ─────────────────────────────── */}
+          <TradeFeed
+            symbol={symbol}
+            prices={prices}
+            positions={positions}
+            history={history}
           />
 
           <PositionsTable
