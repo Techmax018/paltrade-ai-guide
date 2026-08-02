@@ -67,8 +67,8 @@ export function AIPredictionPanel({
 
   const signalText = isBull ? "text-profit" : isBear ? "text-bear" : "text-muted-foreground";
 
-  const btnClass = isNeutral || !confluenceAligned
-    ? "bg-muted text-muted-foreground cursor-not-allowed opacity-60"
+  const btnClass = isNeutral
+    ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
     : isBull
       ? "bg-profit text-background hover:opacity-90 animate-pulse-glow"
       : "bg-bear text-background hover:opacity-90";
@@ -107,7 +107,10 @@ export function AIPredictionPanel({
 
   /* ── Build execution plan ────────────────────────────────────────────── */
   function handleExecute() {
-    if (isNeutral || !confluenceAligned) return;
+    // NEUTRAL bias — no direction, can't execute
+    if (isNeutral) return;
+    // Build and fire the plan regardless of confluenceAligned
+    // (user can still manually override via this button)
     const side = isBull ? "BUY" as const : "SELL" as const;
     onExecute({
       side,
@@ -193,7 +196,7 @@ export function AIPredictionPanel({
       {/* ── Row 3: Execute button ──────────────────────────────────────── */}
       <button
         onClick={handleExecute}
-        disabled={isNeutral || !confluenceAligned || executing}
+        disabled={isNeutral || executing}
         aria-label={`Execute ${signalLabel} strategy`}
         className={`w-full rounded-xl px-4 py-3 text-sm font-extrabold tracking-wide transition flex items-center justify-center gap-2 ${btnClass} disabled:animate-none`}
       >
@@ -208,7 +211,8 @@ export function AIPredictionPanel({
           </>
         ) : !confluenceAligned ? (
           <>
-            <AlertTriangle className="h-4 w-4" /> Low Confidence — Manual Only
+            <AlertTriangle className="h-4 w-4" />
+            EXECUTE {isBull ? "BUY" : "SELL"} — Low Confidence
           </>
         ) : isBull ? (
           <>

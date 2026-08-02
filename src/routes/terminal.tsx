@@ -33,6 +33,12 @@ import {
   playSignalAlert,
 } from "@/lib/audio";
 import { getOrigin } from "@/lib/og";
+import {
+  BarChart2,
+  Brain,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 
 export const Route = createFileRoute("/terminal")({
   loader: async () => ({ origin: await getOrigin() }),
@@ -96,7 +102,12 @@ function TerminalPage() {
   const [autoPilot, setAutoPilot] = useState(false);
   const [autoPilotConfigOpen, setAutoPilotConfigOpen] = useState(false);
   const [autoPilotConfig, setAutoPilotConfig] = useState<AutoPilotConfig>(DEFAULT_CONFIG);
+
+  /* ── Audio toggle (visible in mobile tab bar and sub-bar) ─────────────── */
   const [audioEnabled, setAudioEnabled] = useState(true);
+
+  /* ── Mobile tab switcher ─────────────────────────────────────────────── */
+  const [mobileTab, setMobileTab] = useState<"chart" | "strategy">("chart");
 
   /* ── Derived ─────────────────────────────────────────────────────────── */
   const connRef = useRef<DerivConnection | null>(null);
@@ -142,9 +153,7 @@ function TerminalPage() {
       setCandles(c);
       setSeedPrice(c.at(-1)?.close ?? null);
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [symbolCode, timeframe, status]);
 
   /* ── Tick subscription ───────────────────────────────────────────────── */
@@ -178,12 +187,7 @@ function TerminalPage() {
         const p = cur.find((x) => x.id === id);
         if (!p) return cur;
         const exit = exitPrice ?? p.entry;
-        const closed: ClosedTrade = {
-          ...p,
-          exit,
-          pnl: pnlOf(p, exit),
-          closedAt: Date.now(),
-        };
+        const closed: ClosedTrade = { ...p, exit, pnl: pnlOf(p, exit), closedAt: Date.now() };
         setHistory((h) => [closed, ...h].slice(0, 100));
         if (reason) toast(`${p.label} closed — ${reason}`);
         return cur.filter((x) => x.id !== id);
@@ -206,21 +210,26 @@ function TerminalPage() {
 
   /* ── Manual analysis trigger ─────────────────────────────────────────── */
   function runAnalysis() {
-    if (!candles.length) return;
+    if (!candles.length) {
+      toast.error("No candle data yet — waiting for live data to load.");
+      return;
+    }
     setAnalyzing(true);
+    // Reset stale analysis first so the UI shows the spinner
+    setAnalysis(null);
     setTimeout(() => {
       setAnalysis(analyzeMarket(candles, price));
       setAnalyzing(false);
     }, 600);
   }
 
-  /* ── Core execute function (used by both manual and auto-pilot) ──────── */
+  /* ── Core execute function ───────────────────────────────────────────── */
   async function execute(
     plan: ExecutionPlan,
   ): Promise<{ latencyMs?: number; contractId?: string }> {
     const conn = connRef.current;
     if (!conn || status !== "connected") {
-      toast.error("Not connected to Deriv. Check your API settings.");
+      toast.error("Not connected to Deriv. Open API Settings and enter your credentials.");
       return {};
     }
 
@@ -271,14 +280,10 @@ function TerminalPage() {
           },
         ]);
 
-        // Subscribe to live P&L stream for this contract
         if (res.contractId) {
           conn.subscribeOpenContract(res.contractId, (update) => {
-            if (update.status === "won") {
-              closePosition(res.id, update.currentSpot, "take profit hit");
-            } else if (update.status === "lost") {
-              closePosition(res.id, update.currentSpot, "stop loss hit");
-            }
+            if (update.status === "won") closePosition(res.id, update.currentSpot, "take profit hit");
+            else if (update.status === "lost") closePosition(res.id, update.currentSpot, "stop loss hit");
           });
         }
       }
@@ -294,17 +299,14 @@ function TerminalPage() {
     return { latencyMs: lastLatency, contractId: lastContractId };
   }
 
-  /* ── Auto-Pilot toggle handler (with audio) ──────────────────────────── */
+  /* ── Auto-Pilot toggle ───────────────────────────────────────────────── */
   function handleToggleAutoPilot(next: boolean) {
     setAutoPilot(next);
     if (audioEnabled) {
-      if (next) {
-        playAutoPilotOn();
-        toast.success("Auto-Pilot ACTIVATED — engine scanning for confluences");
-      } else {
-        playAutoPilotOff();
-        toast("Auto-Pilot STANDBY — returning to manual mode");
-      }
+      if (next) { playAutoPilotOn(); toast.success("Auto-Pilot ACTIVATED — engine scanning for confluences"); }
+      else { playAutoPilotOff(); toast("Auto-Pilot STANDBY — returning to manual mode"); }
+    } else {
+      toast(next ? "Auto-Pilot ACTIVATED" : "Auto-Pilot STANDBY");
     }
   }
 
@@ -318,26 +320,18 @@ function TerminalPage() {
     positions,
     connection: connRef.current,
     todayLoss,
-    onExecute: async (plan, _signal) => {
-      return execute(plan);
-    },
+    onExecute: async (plan, _signal) => execute(plan),
     onSignalDetected: (signal: AutonomousSignal) => {
       if (!audioEnabled) return;
-      if (signal.autoExecuted) {
-        playExecutionConfirm();
-      } else if (signal.outcome === "SKIPPED") {
-        playSignalAlert("BLOCK");
-      } else {
-        playSignalAlert(signal.side);
-      }
+      if (signal.autoExecuted) playExecutionConfirm();
+      else if (signal.outcome === "SKIPPED") playSignalAlert("BLOCK");
+      else playSignalAlert(signal.side);
     },
   });
 
-  /* ── Sync engine's latest analysis into the panel analysis state ─────── */
+  /* ── Sync engine analysis into panel ────────────────────────────────── */
   useEffect(() => {
-    if (engine.latestAnalysis && !analysis) {
-      setAnalysis(engine.latestAnalysis);
-    }
+    if (engine.latestAnalysis && !analysis) setAnalysis(engine.latestAnalysis);
   }, [engine.latestAnalysis, analysis]);
 
   function closeAll() {
@@ -345,11 +339,13 @@ function TerminalPage() {
     toast("All positions closed");
   }
 
-  return (
-    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
-      <Toaster />
+  /* ── Effective analysis (live analysis or engine fallback) ───────────── */
+  const effectiveAnalysis = analysis ?? engine.latestAnalysis;
 
-      {/* ── Header with Auto-Pilot controls ──────────────────────────────── */}
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <Toaster position="top-right" richColors />
+
       <TerminalHeader
         status={status}
         account={account}
@@ -359,13 +355,19 @@ function TerminalPage() {
         onOpenAutoPilotConfig={() => setAutoPilotConfigOpen(true)}
       />
 
-      <main className="mx-auto grid w-full max-w-[1600px] gap-4 overflow-x-hidden px-2 py-3 sm:px-4 sm:py-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <h1 className="sr-only">
-          PalTrade Deriv trading terminal for forex and synthetic indices
-        </h1>
+      {/* ── Mobile tab bar — visible below lg only ─────────────────────── */}
+      <MobileTabBar
+        activeTab={mobileTab}
+        audioEnabled={audioEnabled}
+        onChange={setMobileTab}
+        onToggleAudio={() => setAudioEnabled((v) => !v)}
+      />
+
+      <main className="mx-auto grid w-full max-w-[1600px] gap-4 px-2 py-3 sm:px-4 sm:py-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <h1 className="sr-only">PalTrade Deriv trading terminal for forex and synthetic indices</h1>
 
         {/* ── Left column ────────────────────────────────────────────────── */}
-        <div className="space-y-4">
+        <div className={`space-y-4 ${mobileTab === "strategy" ? "hidden lg:block" : "block"}`}>
           <ChartContainer
             candles={candles}
             symbol={symbol}
@@ -380,15 +382,12 @@ function TerminalPage() {
             onTimeframeChange={setTimeframe}
             onToggle={(k) => setOverlays((o) => ({ ...o, [k]: !o[k] }))}
           />
-
-          {/* ── MT5-style live trade feed ─────────────────────────────── */}
           <TradeFeed
             symbol={symbol}
             prices={prices}
             positions={positions}
             history={history}
           />
-
           <PositionsTable
             positions={positions}
             history={history}
@@ -397,8 +396,6 @@ function TerminalPage() {
             onClose={(id) => closePosition(id, prices[symbolCode])}
             onCloseAll={closeAll}
           />
-
-          {/* ── Audit log — full width below positions ────────────────────── */}
           <AuditLog
             signals={engine.signalFeed}
             stats={engine.stats}
@@ -406,23 +403,21 @@ function TerminalPage() {
           />
         </div>
 
-        {/* ── Right column — strategy & AI panel ───────────────────────── */}
-        <StrategyPanel
-          symbol={symbol}
-          price={price}
-          balance={account?.balance ?? 10000}
-          analysis={analysis ?? engine.latestAnalysis}
-          analyzing={analyzing}
-          tripleMode={tripleMode}
-          executing={executing}
-          onToggleTriple={setTripleMode}
-          onAnalyze={() => {
-            runAnalysis();
-            // Also trigger the engine scanner so its analysis stays in sync
-            engine.triggerScan();
-          }}
-          onExecute={execute}
-        />
+        {/* ── Right column ─────────────────────────────────────────────── */}
+        <div className={mobileTab === "chart" ? "hidden lg:block" : "block"}>
+          <StrategyPanel
+            symbol={symbol}
+            price={price}
+            balance={account?.balance ?? 10000}
+            analysis={effectiveAnalysis}
+            analyzing={analyzing}
+            tripleMode={tripleMode}
+            executing={executing}
+            onToggleTriple={setTripleMode}
+            onAnalyze={() => { runAnalysis(); engine.triggerScan(); }}
+            onExecute={execute}
+          />
+        </div>
       </main>
 
       {/* ── Modals / drawers ─────────────────────────────────────────────── */}
@@ -446,6 +441,63 @@ function TerminalPage() {
           toast.success("Auto-Pilot configuration updated");
         }}
       />
+    </div>
+  );
+}
+
+/* ── MobileTabBar ─────────────────────────────────────────────────────────── */
+function MobileTabBar({
+  activeTab,
+  audioEnabled,
+  onChange,
+  onToggleAudio,
+}: {
+  activeTab: "chart" | "strategy";
+  audioEnabled: boolean;
+  onChange: (tab: "chart" | "strategy") => void;
+  onToggleAudio: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-0 border-b border-border/60 bg-card/80 px-2 lg:hidden">
+      <button
+        onClick={() => onChange("chart")}
+        className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors ${
+          activeTab === "chart"
+            ? "border-b-2 border-signal text-signal"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <BarChart2 className="h-3.5 w-3.5" />
+        Chart & Feed
+      </button>
+
+      <button
+        onClick={() => onChange("strategy")}
+        className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors ${
+          activeTab === "strategy"
+            ? "border-b-2 border-signal text-signal"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <Brain className="h-3.5 w-3.5" />
+        AI Strategy
+      </button>
+
+      {/* Audio toggle — right side of tab bar */}
+      <button
+        onClick={onToggleAudio}
+        aria-label={audioEnabled ? "Mute audio alerts" : "Enable audio alerts"}
+        title={audioEnabled ? "Mute alerts" : "Enable alerts"}
+        className={`ml-1 rounded-md border p-1.5 transition-colors ${
+          audioEnabled
+            ? "border-signal/40 bg-signal/10 text-signal"
+            : "border-border text-muted-foreground"
+        }`}
+      >
+        {audioEnabled
+          ? <Volume2 className="h-3.5 w-3.5" />
+          : <VolumeX className="h-3.5 w-3.5" />}
+      </button>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, KeyRound, ShieldCheck } from "lucide-react";
 import type { AccountType } from "@/lib/derivApi";
 
@@ -22,6 +22,15 @@ export function SettingsModal({
   const [appId, setAppId] = useState(values.appId);
   const [token, setToken] = useState(values.token);
   const [accountType, setAccountType] = useState<AccountType>(values.accountType);
+
+  // Sync from props each time the modal opens so stale state is never shown
+  useEffect(() => {
+    if (open) {
+      setAppId(values.appId);
+      setToken(values.token);
+      setAccountType(values.accountType);
+    }
+  }, [open, values.appId, values.token, values.accountType]);
 
   if (!open) return null;
 
