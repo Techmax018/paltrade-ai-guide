@@ -33,11 +33,17 @@ import {
   playSignalAlert,
 } from "@/lib/audio";
 import { getOrigin } from "@/lib/og";
+import { Link } from "@tanstack/react-router";
 import {
   BarChart2,
   Brain,
+  ChevronRight,
+  KeyRound,
+  Link2,
+  Plug,
   Volume2,
   VolumeX,
+  Zap,
 } from "lucide-react";
 
 export const Route = createFileRoute("/terminal")({
@@ -341,6 +347,22 @@ function TerminalPage() {
 
   /* ── Effective analysis (live analysis or engine fallback) ───────────── */
   const effectiveAnalysis = analysis ?? engine.latestAnalysis;
+
+  /* ── Connection gate — show onboarding screen if no account linked ───── */
+  const hasCredentials = !!(settings.appId || settings.token);
+  const hasBrokerConnection = (() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const stored = JSON.parse(localStorage.getItem("paltrade.connections.v1") || "[]");
+      return Array.isArray(stored) && stored.length > 0;
+    } catch { return false; }
+  })();
+
+  if (!hasCredentials && !hasBrokerConnection) {
+    return <ConnectGate onUseSettings={() => setSettingsOpen(true)} settingsOpen={settingsOpen}
+      settingsValues={settings} onCloseSettings={() => setSettingsOpen(false)}
+      onSaveSettings={(v) => { setSettings(v); setSettingsOpen(false); }} />;
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
