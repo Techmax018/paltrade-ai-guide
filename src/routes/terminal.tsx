@@ -16,8 +16,10 @@ import {
   type AutoPilotConfig,
   type AutonomousSignal,
 } from "@/hooks/useAutonomousEngine";
+import { useDerivOAuth, buildDerivOAuthUrl } from "@/hooks/useDerivOAuth";
 import {
   SYMBOLS,
+  DERIV_APP_ID,
   connectWebSocket,
   type AccountInfo,
   type Candle,
@@ -77,11 +79,13 @@ export const Route = createFileRoute("/terminal")({
 });
 
 function TerminalPage() {
+  /* ── Deriv OAuth session (from redirect or persisted localStorage) ────── */
+  const oauth = useDerivOAuth();
+
   /* ── API / connection settings ───────────────────────────────────────── */
-  const [settings, setSettings] = useState<SettingsValues>({
-    appId: "",
-    token: "",
-    accountType: "demo",
+  const [settings, setSettings] = useState<SettingsValues>(() => {
+    // Seed from OAuth session if available, otherwise empty (will be filled below)
+    return { appId: "", token: "", accountType: "demo" };
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
@@ -114,6 +118,36 @@ function TerminalPage() {
 
   /* ── Mobile tab switcher ─────────────────────────────────────────────── */
   const [mobileTab, setMobileTab] = useState<"chart" | "strategy">("chart");
+
+  /* ── Sync OAuth session → WebSocket settings ─────────────────────────── */
+  useEffect(() => {
+    if (oauth.loading) return;
+
+    const appId =
+      (typeof import.meta !== "undefined"
+        ? ((import.meta as unknown as { env?: Record<string, string> }).env
+            ?.VITE_DERIV_APP_ID)
+        : undefined) ?? DERIV_APP_ID;
+
+    if (oauth.activeAccount) {
+      // Full OAuth session — user's real token for account + trading access
+      const accountType = oauth.activeAccount.type === "real" ? "real" : "demo";
+      setSettings((prev) => {
+        if (
+          prev.token === oauth.activeAccount!.token &&
+          prev.accountType === accountType &&
+          prev.appId === appId
+        ) return prev;
+        return { appId, token: oauth.activeAccount!.token, accountType };
+      });
+    } else {
+      // No OAuth session — connect with no token (market data / ticks only)
+      setSettings((prev) => {
+        if (prev.appId === appId && prev.token === "") return prev;
+        return { appId, token: "", accountType: "demo" };
+      });
+    }
+  }, [oauth.activeAccount, oauth.loading]);
 
   /* ── Derived ─────────────────────────────────────────────────────────── */
   const connRef = useRef<DerivConnection | null>(null);
@@ -350,13 +384,25 @@ function TerminalPage() {
 
   /* ── Connection gate — show onboarding screen if no account linked ───── */
   const hasCredentials = !!(settings.appId || settings.token);
-  const hasBrokerConnection = (() => {
+  const hasBrokerConnection = oauth.isAuthenticated || (() => {
     if (typeof window === "undefined") return false;
     try {
       const stored = JSON.parse(localStorage.getItem("paltrade.connections.v1") || "[]");
       return Array.isArray(stored) && stored.length > 0;
     } catch { return false; }
   })();
+
+  // Don't flash the gate while OAuth is still loading from localStorage
+  if (oauth.loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <img src="/android-chrome-192x192.png" alt="PalTrade" className="h-12 w-12 animate-pulse rounded-xl object-cover" />
+          <p className="text-sm text-muted-foreground">Loading session…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!hasCredentials && !hasBrokerConnection) {
     return <ConnectGate onUseSettings={() => setSettingsOpen(true)} settingsOpen={settingsOpen}

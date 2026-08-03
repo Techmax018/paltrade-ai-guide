@@ -16,9 +16,19 @@
  */
 
 export const DERIV_WS_ENDPOINT = "wss://ws.derivws.com/websockets/v3";
-/** Deriv public demo App ID — works without registration for read-only market data */
-export const DERIV_APP_ID = "1089";
-/** false = always use the real Deriv WebSocket (live prices, candles, account on login) */
+
+/**
+ * Deriv App ID — read from VITE_DERIV_APP_ID environment variable.
+ * Set in Vercel project settings (already configured).
+ * Falls back to 1089 (Deriv public demo) for local dev without a .env file.
+ */
+export const DERIV_APP_ID: string =
+  (typeof import.meta !== "undefined" &&
+    (import.meta as unknown as { env?: Record<string, string> }).env
+      ?.VITE_DERIV_APP_ID) ||
+  "1089";
+
+/** false = use the real Deriv WebSocket (live prices + account on login) */
 export const USE_MOCK = false;
 
 export type ConnectionStatus = "disconnected" | "connecting" | "reconnecting" | "connected" | "error";
@@ -589,11 +599,11 @@ class LiveDerivConnection implements DerivConnection {
  * connectWebSocket — connects to Deriv WebSocket.
  *
  * Priority:
- *  1. If USE_MOCK is true → always use mock (for offline dev)
- *  2. If opts.appId is provided → use it for live connection
- *  3. Falls back to the built-in public DERIV_APP_ID (1089) for real market data
- *     with no account features (no trading, candles + ticks only)
- *  4. If still no appId → mock
+ *  1. USE_MOCK = true → always use mock (for offline dev)
+ *  2. appId from opts or DERIV_APP_ID env var → real LiveDerivConnection
+ *     - With token → full account access (balance, trading)
+ *     - Without token → market data only (ticks, candles)
+ *  3. No appId → mock
  */
 export function connectWebSocket(opts: ConnectOptions): DerivConnection {
   if (USE_MOCK) {
