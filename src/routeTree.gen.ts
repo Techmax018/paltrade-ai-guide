@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as BacktestRouteImport } from './routes/backtest'
 import { Route as BrokersRouteImport } from './routes/brokers'
 import { Route as CalculatorRouteImport } from './routes/calculator'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TerminalRouteImport } from './routes/terminal'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
@@ -37,6 +38,11 @@ const CalculatorRoute = CalculatorRouteImport.update({
   path: '/calculator',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/backtest': typeof BacktestRoute
   '/brokers': typeof BrokersRoute
   '/calculator': typeof CalculatorRoute
+  '/login': typeof LoginRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terminal': typeof TerminalRoute
   '/api/chat': typeof ApiChatRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/backtest': typeof BacktestRoute
   '/brokers': typeof BrokersRoute
   '/calculator': typeof CalculatorRoute
+  '/login': typeof LoginRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terminal': typeof TerminalRoute
   '/api/chat': typeof ApiChatRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/backtest': typeof BacktestRoute
   '/brokers': typeof BrokersRoute
   '/calculator': typeof CalculatorRoute
+  '/login': typeof LoginRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terminal': typeof TerminalRoute
   '/api/chat': typeof ApiChatRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/backtest'
     | '/brokers'
     | '/calculator'
+    | '/login'
     | '/sitemap.xml'
     | '/terminal'
     | '/api/chat'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/backtest'
     | '/brokers'
     | '/calculator'
+    | '/login'
     | '/sitemap.xml'
     | '/terminal'
     | '/api/chat'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/backtest'
     | '/brokers'
     | '/calculator'
+    | '/login'
     | '/sitemap.xml'
     | '/terminal'
     | '/api/chat'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   BacktestRoute: typeof BacktestRoute
   BrokersRoute: typeof BrokersRoute
   CalculatorRoute: typeof CalculatorRoute
+  LoginRoute: typeof LoginRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TerminalRoute: typeof TerminalRoute
   ApiChatRoute: typeof ApiChatRoute
@@ -151,6 +164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CalculatorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   BacktestRoute: BacktestRoute,
   BrokersRoute: BrokersRoute,
   CalculatorRoute: CalculatorRoute,
+  LoginRoute: LoginRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TerminalRoute: TerminalRoute,
   ApiChatRoute: ApiChatRoute,
