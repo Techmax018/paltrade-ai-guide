@@ -165,7 +165,7 @@ function Nav() {
 
         {/* Desktop CTA */}
         <div className="hidden items-center gap-2 md:flex">
-          <Link to="/terminal"
+          <Link to="/login"
             className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-glow transition hover:brightness-110">
             <Zap className="h-3.5 w-3.5" /> Launch Terminal
           </Link>
@@ -203,7 +203,7 @@ function Nav() {
                 </a>
               )
             )}
-            <Link to="/terminal" onClick={() => setOpen(false)}
+            <Link to="/login" onClick={() => setOpen(false)}
               className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-glow">
               <Zap className="h-4 w-4" /> Launch Terminal
             </Link>
@@ -310,7 +310,7 @@ function Hero() {
 
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
-              to="/terminal"
+              to="/login"
               className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-glow transition hover:brightness-110"
             >
               <Zap className="h-4 w-4" /> Open Trading Terminal
@@ -561,7 +561,7 @@ function HowItWorks() {
         </div>
 
         <div className="mt-10 text-center">
-          <Link to="/terminal"
+          <Link to="/login"
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-8 py-3 text-sm font-bold text-primary-foreground shadow-glow transition hover:brightness-110">
             <Zap className="h-4 w-4" /> Start Trading Now
           </Link>
