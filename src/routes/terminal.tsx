@@ -523,3 +523,138 @@ function MobileTabBar({
     </div>
   );
 }
+
+/* ── ConnectGate ──────────────────────────────────────────────────────────── */
+/**
+ * Full-screen gate shown when no Deriv account is connected and no
+ * API credentials have been saved in Settings. The user must either:
+ *   1. Go to the Brokers page to add a Deriv connection, or
+ *   2. Enter their App ID + token directly in API Settings.
+ *
+ * Once either action completes the gate checks localStorage / settings
+ * state and disappears automatically because `hasCredentials` or
+ * `hasBrokerConnection` will become truthy.
+ */
+function ConnectGate({
+  onUseSettings,
+  settingsOpen,
+  settingsValues,
+  onCloseSettings,
+  onSaveSettings,
+}: {
+  onUseSettings: () => void;
+  settingsOpen: boolean;
+  settingsValues: import("@/components/terminal/SettingsModal").SettingsValues;
+  onCloseSettings: () => void;
+  onSaveSettings: (v: import("@/components/terminal/SettingsModal").SettingsValues) => void;
+}) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-foreground">
+      {/* Glow backdrop */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 70% 50% at 50% 40%, oklch(0.74 0.13 205 / 0.10) 0%, transparent 70%)",
+        }}
+      />
+
+      <div className="relative z-10 w-full max-w-md space-y-6 text-center">
+        {/* Logo */}
+        <div className="flex flex-col items-center gap-3">
+          <img
+            src="/android-chrome-192x192.png"
+            alt="PalTrade"
+            className="h-16 w-16 rounded-2xl object-cover shadow-glow"
+          />
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Pal<span className="text-signal">Trade</span> Terminal
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Connect a Deriv account to start trading
+            </p>
+          </div>
+        </div>
+
+        {/* Options card */}
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-card space-y-4 text-left">
+          {/* Option 1 — Brokers page */}
+          <Link
+            to="/brokers"
+            className="flex items-center gap-4 rounded-xl border border-signal/30 bg-signal/5 p-4 transition hover:bg-signal/10"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-signal/15 text-signal">
+              <Plug className="h-5 w-5" />
+            </span>
+            <div>
+              <div className="font-semibold text-sm">Connect via Brokers page</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Add your Deriv or Vantage account and return to the terminal.
+              </div>
+            </div>
+            <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+          </Link>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-border/60" />
+            <span className="text-[11px] text-muted-foreground">or</span>
+            <div className="h-px flex-1 bg-border/60" />
+          </div>
+
+          {/* Option 2 — API Settings */}
+          <button
+            onClick={onUseSettings}
+            className="flex w-full items-center gap-4 rounded-xl border border-border bg-background/40 p-4 transition hover:border-signal/30 hover:bg-signal/5"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+              <KeyRound className="h-5 w-5" />
+            </span>
+            <div className="text-left">
+              <div className="font-semibold text-sm">Enter API credentials directly</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Paste your Deriv App ID and API token to connect without the Brokers page.
+              </div>
+            </div>
+            <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* What you get */}
+        <div className="rounded-xl border border-border/60 bg-card/40 p-4 text-left space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+            What you get after connecting
+          </div>
+          {[
+            { icon: <Zap className="h-3.5 w-3.5 text-signal" />, text: "Live Deriv WebSocket price feed" },
+            { icon: <Link2 className="h-3.5 w-3.5 text-profit" />, text: "Real account balance & equity" },
+            { icon: <BarChart2 className="h-3.5 w-3.5 text-[var(--gold)]" />, text: "1-click & auto-pilot trade execution" },
+          ].map((item) => (
+            <div key={item.text} className="flex items-center gap-2 text-xs text-muted-foreground">
+              {item.icon}
+              {item.text}
+            </div>
+          ))}
+        </div>
+
+        {/* Back to home */}
+        <Link
+          to="/"
+          className="inline-block text-xs text-muted-foreground hover:text-foreground transition"
+        >
+          ← Back to home
+        </Link>
+      </div>
+
+      {/* Settings modal (for option 2) */}
+      <SettingsModal
+        open={settingsOpen}
+        values={settingsValues}
+        onClose={onCloseSettings}
+        onSave={onSaveSettings}
+      />
+    </div>
+  );
+}
