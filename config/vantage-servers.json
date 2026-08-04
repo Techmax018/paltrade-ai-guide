@@ -1,0 +1,10 @@
+{
+  "comment": "Vantage MT5 server strings. Edit this file to add/remove servers without touching frontend code.",
+  "servers": [
+    { "id": "vantage-demo",   "label": "VantageFX-Demo",                "type": "demo" },
+    { "id": "vantage-live-1", "label": "VantageInternational-Live",     "type": "live" },
+    { "id": "vantage-live-2", "label": "VantageInternational-Live 2",   "type": "live" },
+    { "id": "vantage-live-3", "label": "VantageInternational-Live 3",   "type": "live" },
+    { "id": "vantage-au",     "label": "VantageFX-AU-Live",             "type": "live" }
+  ]
+}
