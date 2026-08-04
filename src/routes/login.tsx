@@ -58,10 +58,9 @@ function LoginPage() {
     <div className="min-h-screen" style={{ background: "#020617" }}>
       <div className="grid min-h-screen lg:grid-cols-2">
 
-        {/* ── Left: brand + chart ── */}
+        {/* ── Left: brand + chart (desktop only) ── */}
         <div className="relative hidden flex-col items-center justify-center overflow-hidden px-12 lg:flex"
           style={{ background: "linear-gradient(155deg, #0f172a 0%, #0c1a2e 100%)" }}>
-          {/* Subtle glow */}
           <div aria-hidden className="pointer-events-none absolute inset-0"
             style={{ background: "radial-gradient(ellipse 60% 50% at 30% 40%, rgba(6,182,212,0.08) 0%, transparent 70%)" }} />
 
@@ -81,9 +80,7 @@ function LoginPage() {
               </div>
             </div>
 
-            {/* Headline */}
-            <h1 className="mt-10 text-3xl font-bold leading-snug"
-              style={{ color: "#f1f5f9" }}>
+            <h1 className="mt-10 text-3xl font-bold leading-snug" style={{ color: "#f1f5f9" }}>
               Autonomous trading,<br />
               <span style={{ color: "#06b6d4" }}>powered by AI.</span>
             </h1>
@@ -93,7 +90,6 @@ function LoginPage() {
               detects confluences and executes positions — hands-free.
             </p>
 
-            {/* 3 inline stats */}
             <div className="mt-8 grid grid-cols-3 gap-3">
               {[
                 { value: "84%",   label: "AI Win Rate" },
@@ -109,7 +105,6 @@ function LoginPage() {
               ))}
             </div>
 
-            {/* Mini chart */}
             <div className="mt-8 overflow-hidden rounded-xl"
               style={{ border: "1px solid rgba(6,182,212,0.13)", background: "rgba(6,182,212,0.03)" }}>
               <div className="flex items-center gap-2 border-b px-3 py-2"
@@ -127,29 +122,29 @@ function LoginPage() {
         </div>
 
         {/* ── Right: auth card ── */}
-        <div className="flex flex-col items-center justify-center px-6 py-10"
+        {/* Mobile: full-viewport centred card. Desktop: fills right half. */}
+        <div className="flex min-h-screen items-center justify-center px-5 py-8 sm:px-8 lg:px-10"
           style={{ background: "#0a0f1e" }}>
 
-          {/* Mobile logo */}
-          <div className="mb-8 flex items-center gap-2 lg:hidden">
-            <img src="/android-chrome-192x192.png" alt="PalTrade"
-              className="h-8 w-8 rounded-lg object-cover" />
-            <span className="font-bold tracking-wide" style={{ color: "#e2e8f0", fontSize: 15 }}>
-              PAL<span style={{ color: "#06b6d4" }}>TRADE</span>
-            </span>
-            <span className="rounded px-1 py-0.5 font-mono text-[8px] font-bold uppercase"
-              style={{ background: "#f59e0b", color: "#020617" }}>PRO</span>
-          </div>
-
-          <div className="w-full max-w-sm space-y-5">
-            {/* Heading */}
-            <div className="text-center">
-              <h2 className="text-xl font-bold" style={{ color: "#f1f5f9" }}>
-                Sign in to PalTrade
-              </h2>
-              <p className="mt-1.5 text-sm" style={{ color: "rgba(148,163,184,0.65)" }}>
-                Use your Deriv account — no new password needed.
-              </p>
+          <div className="w-full max-w-sm">
+            {/* Logo — shown on all sizes (desktop left panel hidden on mobile) */}
+            <div className="mb-7 flex flex-col items-center gap-3 text-center">
+              <div className="relative">
+                <img src="/android-chrome-192x192.png" alt="PalTrade"
+                  className="h-12 w-12 rounded-2xl object-cover"
+                  style={{ boxShadow: "0 0 24px rgba(6,182,212,0.5)" }} />
+                <span className="absolute -bottom-1 -right-1 rounded-full px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase"
+                  style={{ background: "#f59e0b", color: "#020617" }}>PRO</span>
+              </div>
+              <div>
+                <div className="font-bold uppercase tracking-[0.18em]"
+                  style={{ fontSize: 18, color: "#e2e8f0" }}>
+                  PAL<span style={{ color: "#06b6d4" }}>TRADE</span>
+                </div>
+                <p className="mt-1 text-sm" style={{ color: "rgba(148,163,184,0.6)" }}>
+                  Sign in to start trading
+                </p>
+              </div>
             </div>
 
             {/* Primary OAuth button */}
@@ -163,39 +158,37 @@ function LoginPage() {
               }}>
               <span aria-hidden
                 className="pointer-events-none absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-transparent via-white/12 to-transparent transition-transform duration-700 group-hover:translate-x-[100%]" />
-              <ExternalLink className="h-4 w-4" />
+              <ExternalLink className="h-4 w-4 shrink-0" />
               Login with Deriv Account
             </a>
 
-            <p className="text-center font-mono text-[10px]"
-              style={{ color: "rgba(100,116,139,0.65)" }}>
+            <p className="mt-2 text-center font-mono text-[10px]"
+              style={{ color: "rgba(100,116,139,0.6)" }}>
               OAuth 2.0 · No permanent tokens stored
             </p>
 
             {/* Divider */}
-            <div className="flex items-center gap-3">
+            <div className="my-5 flex items-center gap-3">
               <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.07)" }} />
-              <span className="text-[11px]" style={{ color: "rgba(100,116,139,0.55)" }}>or</span>
+              <span className="text-[11px]" style={{ color: "rgba(100,116,139,0.5)" }}>or</span>
               <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.07)" }} />
             </div>
 
             {/* Vantage accordion */}
             <VantageAccordion />
 
-            {/* Demo mode */}
-            <div className="text-center pt-1">
+            {/* Demo + disclaimer */}
+            <div className="mt-5 space-y-3 text-center">
               <button onClick={handleDemoMode}
                 className="text-xs hover:underline transition-colors"
                 style={{ color: "rgba(100,116,139,0.6)" }}>
                 Try Demo Terminal (read-only) →
               </button>
+              <p className="text-[10px] leading-relaxed"
+                style={{ color: "rgba(71,85,105,0.5)" }}>
+                Trading involves substantial risk. Not financial advice.
+              </p>
             </div>
-
-            {/* Disclaimer */}
-            <p className="text-center text-[10px] leading-relaxed pt-2"
-              style={{ color: "rgba(71,85,105,0.55)" }}>
-              Trading involves substantial risk. Not financial advice.
-            </p>
           </div>
         </div>
 
