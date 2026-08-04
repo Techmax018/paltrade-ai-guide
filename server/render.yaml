@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: paltrade-backend
+    runtime: node
+    region: oregon                # Closest to most Vantage/Deriv endpoints
+    plan: starter                 # Upgrade to standard for production
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      # All secrets set manually in Render dashboard — never in this file
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: METAAPI_TOKEN
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: PALTRADE_API_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://paltrade-ai-guide.vercel.app
