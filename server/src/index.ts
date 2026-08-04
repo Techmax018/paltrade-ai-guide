@@ -24,6 +24,7 @@ import { startVantageStream } from "./ws/vantageStream";
 import { startDerivStream }   from "./ws/derivStream";
 import { WsInitMessage, NormalisedFrame } from "./ws/types";
 import { query, queryOne } from "./db/client";
+import { runMigration } from "./db/migrate";
 
 const app  = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -185,7 +186,16 @@ wss.on("connection", (ws) => {
 });
 
 /* ─────────────────────── Start ──────────────────────────────────────────── */
-server.listen(PORT, () => {
-  console.log(`[server] PalTrade backend running on :${PORT}`);
-  console.log(`[server] Env: ${process.env.NODE_ENV}`);
-});
+// Run schema migration on every startup — idempotent, safe to repeat
+runMigration()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`[server] PalTrade backend running on :${PORT}`);
+      console.log(`[server] Database: ${process.env.DATABASE_URL?.split("@")[1] ?? "connected"}`);
+      console.log(`[server] Env: ${process.env.NODE_ENV}`);
+    });
+  })
+  .catch((err) => {
+    console.error("[server] Cannot start — migration failed:", err.message);
+    process.exit(1);
+  });
