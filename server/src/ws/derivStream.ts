@@ -189,6 +189,23 @@ export async function startDerivStream(
     });
   });
 
+  derivWs.on("unexpected-response", (_req, res) => {
+    // Cloudflare edge rejection during the WS handshake (403 / 1020):
+    // halt and instruct the client to renew its IP instead of reconnecting.
+    const blocked = res.statusCode === 403 || res.statusCode === 429;
+    sendToClient(clientWs, {
+      type: "error",
+      broker: "DERIV",
+      timestamp: Date.now(),
+      payload: {
+        message: blocked ? WAF_CLIENT_HINT : `Deriv handshake failed (HTTP ${res.statusCode}).`,
+        ...(blocked ? { action: "SWITCH_NETWORK_RENEW_IP" } : {}),
+        status: res.statusCode,
+      },
+    });
+    derivWs.terminate();
+  });
+
   derivWs.on("close", () => {
     sendToClient(clientWs, {
       type: "error",

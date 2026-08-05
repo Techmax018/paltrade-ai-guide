@@ -52,7 +52,7 @@ export function isWafBlockedError(err: unknown): err is WafBlockedError {
   return err instanceof Error && err.name === "WafBlockedError";
 }
 
-const CLIENT_MESSAGE =
+export const WAF_CLIENT_HINT =
   "Connection blocked by the broker's edge firewall. Switch network connection / renew your IP address (toggle mobile hotspot, VPN or proxy) and reconnect.";
 
 /**
@@ -92,7 +92,7 @@ export async function inspectResponse(res: Response): Promise<WafVerdict> {
       status: res.status,
       ...(rayId ? { rayId } : {}),
       reason: `Cloudflare WAF block (HTTP ${res.status})${rayId ? ` ray=${rayId}` : ""}`,
-      clientMessage: CLIENT_MESSAGE,
+      clientMessage: WAF_CLIENT_HINT,
     };
   }
 
@@ -103,7 +103,7 @@ export async function inspectResponse(res: Response): Promise<WafVerdict> {
       status: res.status,
       ...(rayId ? { rayId } : {}),
       reason: `Edge rejection (HTTP ${res.status})`,
-      clientMessage: CLIENT_MESSAGE,
+      clientMessage: WAF_CLIENT_HINT,
     };
   }
 
