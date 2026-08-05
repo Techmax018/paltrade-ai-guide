@@ -16,7 +16,6 @@ import {
   inspectResponse,
   WafBlockedError,
   type WafVerdict,
-  WAF_CLIENT_HINT,
 } from "./wafInterceptor";
 
 export { WAF_CLIENT_HINT, WafBlockedError, isWafBlockedError } from "./wafInterceptor";
