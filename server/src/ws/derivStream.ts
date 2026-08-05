@@ -55,8 +55,14 @@ export async function startDerivStream(
     throw new Error("Failed to decrypt Deriv token. Re-connect your account.");
   }
 
-  /* ── 2. Open Deriv WebSocket ─────────────────────────────────────────── */
-  const derivWs = new WebSocket(`${DERIV_WS}?app_id=${DERIV_APP_ID}`);
+  /* ── 2. Open Deriv WebSocket with an authentic browser signature ─────── */
+  const derivWs = new WebSocket(`${DERIV_WS}?app_id=${DERIV_APP_ID}`, {
+    headers: {
+      ...browserHeaders({ "Sec-Fetch-Site": "cross-site" }),
+      Origin: "https://app.deriv.com",
+    },
+    handshakeTimeout: 20_000,
+  });
   let reqId = 1;
 
   function sendDeriv(payload: Record<string, unknown>) {
