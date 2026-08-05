@@ -214,7 +214,7 @@ export function openBrokerStream(
         break;
 
       case "account_update":
-        handlers.onAccountUpdate?.(frame.payload as AccountMetrics);
+        handlers.onAccountUpdate?.(frame.payload as unknown as AccountMetrics);
         break;
 
       case "position_update":
