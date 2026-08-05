@@ -25,6 +25,14 @@
  *   GET https://mt-client-api-v1.london.agiliumtrade.ai/users/current/accounts/{id}/account-information
  */
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  controlledJson,
+  isWafBlockedError,
+  jitteredDelay,
+  backoffDelay,
+  sleep,
+  WAF_CLIENT_MESSAGE,
+} from "@/lib/wafFetch";
 
 /* ── JWT verification (Edge-compatible, no external libs) ──────────────── */
 async function verifyJWT(
