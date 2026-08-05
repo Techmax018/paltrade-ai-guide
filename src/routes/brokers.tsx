@@ -257,15 +257,25 @@ function VantageCard() {
   function openStream(token: string) {
     esRef.current?.close();
     setStreamStatus("connecting");
+    setWafAlert("");
     const es = new EventSource(`/api/v1/broker/stream?token=${encodeURIComponent(token)}`);
     esRef.current = es;
     es.addEventListener("connected", () => setStreamStatus("live"));
     es.addEventListener("account-update", (e) => {
       try { setMetrics(JSON.parse(e.data) as VantageMetrics); } catch { /* ignore */ }
     });
+    // Edge firewall block — the server has halted polling on purpose.
+    es.addEventListener("waf-blocked", (e) => {
+      let message = "Broker edge firewall blocked this connection. Switch network connection / renew your IP address.";
+      try { message = (JSON.parse((e as MessageEvent).data) as { message?: string }).message ?? message; } catch { /* ignore */ }
+      setWafAlert(message);
+      setStreamStatus("error");
+      es.close();
+    });
     es.addEventListener("error", () => { setStreamStatus("error"); es.close(); });
     es.onerror = () => { setStreamStatus("error"); es.close(); };
   }
+
 
   // ── RULE 2 + 3: connectVantageAccount — locking, timeout, secure POST ─────
   async function connectVantageAccount() {
