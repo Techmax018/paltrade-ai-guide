@@ -38,7 +38,10 @@ export function buildDerivOAuthUrl(): string {
       (import.meta as unknown as { env?: Record<string, string> }).env
         ?.VITE_DERIV_APP_ID) ||
     "1089";
-  return `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}`;
+  // redirect_uri must point to /login so the OAuth callback is handled there
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://paltrade-ai-guide.vercel.app";
+  const redirectUri = encodeURIComponent(`${origin}/login`);
+  return `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&redirect_uri=${redirectUri}`;
 }
 
 /* ── Types ──────────────────────────────────────────────────────────────── */

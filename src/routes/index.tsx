@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Activity,
   BarChart2,
@@ -109,6 +110,17 @@ type ChatMsg = { role: "user" | "assistant"; content: string };
 
 /* ── Root page component ──────────────────────────────────────────── */
 function Home() {
+  const navigate = useNavigate();
+
+  // If Deriv OAuth redirects back to the homepage (old registered URL),
+  // immediately forward to /login where the tokens are parsed.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).has("acct1")) {
+      navigate({ to: "/login", search: window.location.search } as never);
+    }
+  }, [navigate]);
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <Nav />
