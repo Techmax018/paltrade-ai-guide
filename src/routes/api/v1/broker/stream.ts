@@ -72,7 +72,7 @@ async function verifyJWT(
   }
 }
 
-/* ── MetaApi account information fetcher ───────────────────────────────── */
+/* ── MetaApi account information fetcher (WAF-hardened) ────────────────── */
 const METAAPI_CLIENT_BASE =
   "https://mt-client-api-v1.london.agiliumtrade.ai";
 
@@ -94,7 +94,10 @@ async function fetchAccountInfo(
   metaToken: string,
   metaAccountId: string,
 ): Promise<MT5AccountInfo> {
-  const res = await fetch(
+  // controlledFetch adds an authentic browser signature, retries transient
+  // failures with exponential backoff, and throws WafBlockedError on a
+  // Cloudflare edge block so the caller can halt instead of hammering.
+  return controlledJson<MT5AccountInfo>(
     `${METAAPI_CLIENT_BASE}/users/current/accounts/${metaAccountId}/account-information`,
     {
       headers: {
@@ -103,13 +106,8 @@ async function fetchAccountInfo(
       },
     },
   );
-
-  if (!res.ok) {
-    throw new Error(`MetaApi account-info ${res.status}`);
-  }
-
-  return (await res.json()) as MT5AccountInfo;
 }
+
 
 /* ── SSE helpers ─────────────────────────────────────────────────────────── */
 function sseEvent(event: string, data: unknown): string {
