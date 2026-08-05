@@ -222,6 +222,7 @@ function VantageCard() {
   const [server, setServer] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [err, setErr] = useState("");
+  const [wafAlert, setWafAlert] = useState("");
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -257,15 +258,25 @@ function VantageCard() {
   function openStream(token: string) {
     esRef.current?.close();
     setStreamStatus("connecting");
+    setWafAlert("");
     const es = new EventSource(`/api/v1/broker/stream?token=${encodeURIComponent(token)}`);
     esRef.current = es;
     es.addEventListener("connected", () => setStreamStatus("live"));
     es.addEventListener("account-update", (e) => {
       try { setMetrics(JSON.parse(e.data) as VantageMetrics); } catch { /* ignore */ }
     });
+    // Edge firewall block — the server has halted polling on purpose.
+    es.addEventListener("waf-blocked", (e) => {
+      let message = "Broker edge firewall blocked this connection. Switch network connection / renew your IP address.";
+      try { message = (JSON.parse((e as MessageEvent).data) as { message?: string }).message ?? message; } catch { /* ignore */ }
+      setWafAlert(message);
+      setStreamStatus("error");
+      es.close();
+    });
     es.addEventListener("error", () => { setStreamStatus("error"); es.close(); });
     es.onerror = () => { setStreamStatus("error"); es.close(); };
   }
+
 
   // ── RULE 2 + 3: connectVantageAccount — locking, timeout, secure POST ─────
   async function connectVantageAccount() {
@@ -359,6 +370,15 @@ function VantageCard() {
               {session.accountType} · expires {new Date(session.expiresAt).toLocaleTimeString()}
             </div>
           </div>
+          {wafAlert && (
+            <div role="alert" className="rounded-md border border-bear/40 bg-bear/10 p-3 text-xs text-bear">
+              <span className="font-semibold">Connection blocked by broker firewall.</span>{" "}
+              {wafAlert} Polling has been halted to avoid deepening the block —{" "}
+              <button onClick={() => session && openStream(session.sessionToken)} className="underline">
+                retry after switching network
+              </button>.
+            </div>
+          )}
           <LiveMetrics status={streamStatus} metrics={metrics} />
           <button onClick={disconnect}
             className="flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground hover:border-bear/50 hover:text-bear">

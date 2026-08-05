@@ -13,6 +13,7 @@
 import MetaApi from "metaapi.cloud-sdk";
 import { WebSocket } from "ws";
 import { query } from "../db/client";
+import { startPollingLoop } from "../lib/requestController";
 import { NormalisedFrame, AccountUpdate } from "./types";
 
 function send(ws: WebSocket, frame: NormalisedFrame) {
@@ -75,11 +76,11 @@ export async function startVantageStream(
     },
   });
 
-  /* ── 3. Stream account info every 3 s ───────────────────────────────── */
-  const interval = setInterval(async () => {
-    try {
+  /* ── 3. Throttled account polling (3–5 s jitter, backoff, WAF halt) ─── */
+  const stopPolling = startPollingLoop<AccountUpdate>({
+    fetcher: async () => {
       const info = await connection.getAccountInformation();
-      const update: AccountUpdate = {
+      return {
         balance:     info.balance,
         equity:      info.equity,
         margin:      info.margin,
@@ -88,21 +89,39 @@ export async function startVantageStream(
         currency:    info.currency,
         leverage:    info.leverage,
       };
+    },
+    onData: (update) => {
       send(ws, {
         type: "account_update",
         broker: "VANTAGE_MT5",
         timestamp: Date.now(),
         payload: update,
       });
-    } catch (err) {
+    },
+    onWafHalt: (verdict) => {
+      // Fail-safe posture: stop polling entirely and tell the UI to renew IP.
       send(ws, {
         type: "error",
         broker: "VANTAGE_MT5",
         timestamp: Date.now(),
-        payload: { message: "Failed to fetch account info", detail: String(err) },
+        payload: {
+          message: verdict.clientMessage,
+          action: "SWITCH_NETWORK_RENEW_IP",
+          status: verdict.status,
+          rayId: verdict.rayId ?? null,
+        },
       });
-    }
-  }, 3_000);
+    },
+    onTransientError: (message) => {
+      send(ws, {
+        type: "error",
+        broker: "VANTAGE_MT5",
+        timestamp: Date.now(),
+        payload: { message: "Failed to fetch account info", detail: message },
+      });
+    },
+  });
+
 
   /* ── 4. Listen for position / deal events ────────────────────────────── */
   connection.addSynchronizationListener({
@@ -129,7 +148,7 @@ export async function startVantageStream(
 
   /* ── 5. Cleanup function ──────────────────────────────────────────────── */
   return () => {
-    clearInterval(interval);
+    stopPolling();
     connection.close();
   };
 }

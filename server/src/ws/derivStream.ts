@@ -13,6 +13,7 @@
 import WebSocket from "ws";
 import { query } from "../db/client";
 import { decrypt } from "../lib/auth";
+import { browserHeaders, WAF_CLIENT_HINT } from "../lib/requestController";
 import { NormalisedFrame, AccountUpdate } from "./types";
 
 const DERIV_WS = "wss://ws.derivws.com/websockets/v3";
@@ -55,8 +56,14 @@ export async function startDerivStream(
     throw new Error("Failed to decrypt Deriv token. Re-connect your account.");
   }
 
-  /* ── 2. Open Deriv WebSocket ─────────────────────────────────────────── */
-  const derivWs = new WebSocket(`${DERIV_WS}?app_id=${DERIV_APP_ID}`);
+  /* ── 2. Open Deriv WebSocket with an authentic browser signature ─────── */
+  const derivWs = new WebSocket(`${DERIV_WS}?app_id=${DERIV_APP_ID}`, {
+    headers: {
+      ...browserHeaders({ "Sec-Fetch-Site": "cross-site" }),
+      Origin: "https://app.deriv.com",
+    },
+    handshakeTimeout: 20_000,
+  });
   let reqId = 1;
 
   function sendDeriv(payload: Record<string, unknown>) {
@@ -180,6 +187,23 @@ export async function startDerivStream(
       timestamp: Date.now(),
       payload: { message: "Deriv WebSocket error", detail: err.message },
     });
+  });
+
+  derivWs.on("unexpected-response", (_req, res) => {
+    // Cloudflare edge rejection during the WS handshake (403 / 1020):
+    // halt and instruct the client to renew its IP instead of reconnecting.
+    const blocked = res.statusCode === 403 || res.statusCode === 429;
+    sendToClient(clientWs, {
+      type: "error",
+      broker: "DERIV",
+      timestamp: Date.now(),
+      payload: {
+        message: blocked ? WAF_CLIENT_HINT : `Deriv handshake failed (HTTP ${res.statusCode}).`,
+        ...(blocked ? { action: "SWITCH_NETWORK_RENEW_IP" } : {}),
+        status: res.statusCode,
+      },
+    });
+    derivWs.terminate();
   });
 
   derivWs.on("close", () => {

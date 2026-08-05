@@ -9,41 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as BacktestRouteImport } from './routes/backtest'
-import { Route as BrokersRouteImport } from './routes/brokers'
-import { Route as CalculatorRouteImport } from './routes/calculator'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TerminalRouteImport } from './routes/terminal'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as CalculatorRouteImport } from './routes/calculator'
+import { Route as BrokersRouteImport } from './routes/brokers'
+import { Route as BacktestRouteImport } from './routes/backtest'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
-import { Route as ApiV1AuthConnectBrokerRouteImport } from './routes/api/v1/auth/connect-broker'
-import { Route as ApiV1BrokerServersRouteImport } from './routes/api/v1/broker/servers'
 import { Route as ApiV1BrokerStreamRouteImport } from './routes/api/v1/broker/stream'
+import { Route as ApiV1BrokerServersRouteImport } from './routes/api/v1/broker/servers'
+import { Route as ApiV1AuthConnectBrokerRouteImport } from './routes/api/v1/auth/connect-broker'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BacktestRoute = BacktestRouteImport.update({
-  id: '/backtest',
-  path: '/backtest',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BrokersRoute = BrokersRouteImport.update({
-  id: '/brokers',
-  path: '/brokers',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CalculatorRoute = CalculatorRouteImport.update({
-  id: '/calculator',
-  path: '/calculator',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const TerminalRoute = TerminalRouteImport.update({
+  id: '/terminal',
+  path: '/terminal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -51,9 +31,29 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TerminalRoute = TerminalRouteImport.update({
-  id: '/terminal',
-  path: '/terminal',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalculatorRoute = CalculatorRouteImport.update({
+  id: '/calculator',
+  path: '/calculator',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BrokersRoute = BrokersRouteImport.update({
+  id: '/brokers',
+  path: '/brokers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BacktestRoute = BacktestRouteImport.update({
+  id: '/backtest',
+  path: '/backtest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
@@ -61,9 +61,9 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiV1AuthConnectBrokerRoute = ApiV1AuthConnectBrokerRouteImport.update({
-  id: '/api/v1/auth/connect-broker',
-  path: '/api/v1/auth/connect-broker',
+const ApiV1BrokerStreamRoute = ApiV1BrokerStreamRouteImport.update({
+  id: '/api/v1/broker/stream',
+  path: '/api/v1/broker/stream',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiV1BrokerServersRoute = ApiV1BrokerServersRouteImport.update({
@@ -71,9 +71,9 @@ const ApiV1BrokerServersRoute = ApiV1BrokerServersRouteImport.update({
   path: '/api/v1/broker/servers',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiV1BrokerStreamRoute = ApiV1BrokerStreamRouteImport.update({
-  id: '/api/v1/broker/stream',
-  path: '/api/v1/broker/stream',
+const ApiV1AuthConnectBrokerRoute = ApiV1AuthConnectBrokerRouteImport.update({
+  id: '/api/v1/auth/connect-broker',
+  path: '/api/v1/auth/connect-broker',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -175,39 +175,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/backtest': {
-      id: '/backtest'
-      path: '/backtest'
-      fullPath: '/backtest'
-      preLoaderRoute: typeof BacktestRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/brokers': {
-      id: '/brokers'
-      path: '/brokers'
-      fullPath: '/brokers'
-      preLoaderRoute: typeof BrokersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/calculator': {
-      id: '/calculator'
-      path: '/calculator'
-      fullPath: '/calculator'
-      preLoaderRoute: typeof CalculatorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/terminal': {
+      id: '/terminal'
+      path: '/terminal'
+      fullPath: '/terminal'
+      preLoaderRoute: typeof TerminalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemap.xml': {
@@ -217,11 +189,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/terminal': {
-      id: '/terminal'
-      path: '/terminal'
-      fullPath: '/terminal'
-      preLoaderRoute: typeof TerminalRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calculator': {
+      id: '/calculator'
+      path: '/calculator'
+      fullPath: '/calculator'
+      preLoaderRoute: typeof CalculatorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/brokers': {
+      id: '/brokers'
+      path: '/brokers'
+      fullPath: '/brokers'
+      preLoaderRoute: typeof BrokersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/backtest': {
+      id: '/backtest'
+      path: '/backtest'
+      fullPath: '/backtest'
+      preLoaderRoute: typeof BacktestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/chat': {
@@ -231,11 +231,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/v1/auth/connect-broker': {
-      id: '/api/v1/auth/connect-broker'
-      path: '/api/v1/auth/connect-broker'
-      fullPath: '/api/v1/auth/connect-broker'
-      preLoaderRoute: typeof ApiV1AuthConnectBrokerRouteImport
+    '/api/v1/broker/stream': {
+      id: '/api/v1/broker/stream'
+      path: '/api/v1/broker/stream'
+      fullPath: '/api/v1/broker/stream'
+      preLoaderRoute: typeof ApiV1BrokerStreamRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/v1/broker/servers': {
@@ -245,11 +245,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1BrokerServersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/v1/broker/stream': {
-      id: '/api/v1/broker/stream'
-      path: '/api/v1/broker/stream'
-      fullPath: '/api/v1/broker/stream'
-      preLoaderRoute: typeof ApiV1BrokerStreamRouteImport
+    '/api/v1/auth/connect-broker': {
+      id: '/api/v1/auth/connect-broker'
+      path: '/api/v1/auth/connect-broker'
+      fullPath: '/api/v1/auth/connect-broker'
+      preLoaderRoute: typeof ApiV1AuthConnectBrokerRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -271,13 +271,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

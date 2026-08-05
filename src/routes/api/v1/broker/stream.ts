@@ -25,6 +25,14 @@
  *   GET https://mt-client-api-v1.london.agiliumtrade.ai/users/current/accounts/{id}/account-information
  */
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  controlledJson,
+  isWafBlockedError,
+  jitteredDelay,
+  backoffDelay,
+  sleep,
+  WAF_CLIENT_MESSAGE,
+} from "@/lib/wafFetch";
 
 /* ── JWT verification (Edge-compatible, no external libs) ──────────────── */
 async function verifyJWT(
@@ -72,7 +80,7 @@ async function verifyJWT(
   }
 }
 
-/* ── MetaApi account information fetcher ───────────────────────────────── */
+/* ── MetaApi account information fetcher (WAF-hardened) ────────────────── */
 const METAAPI_CLIENT_BASE =
   "https://mt-client-api-v1.london.agiliumtrade.ai";
 
@@ -94,7 +102,10 @@ async function fetchAccountInfo(
   metaToken: string,
   metaAccountId: string,
 ): Promise<MT5AccountInfo> {
-  const res = await fetch(
+  // controlledFetch adds an authentic browser signature, retries transient
+  // failures with exponential backoff, and throws WafBlockedError on a
+  // Cloudflare edge block so the caller can halt instead of hammering.
+  return controlledJson<MT5AccountInfo>(
     `${METAAPI_CLIENT_BASE}/users/current/accounts/${metaAccountId}/account-information`,
     {
       headers: {
@@ -103,13 +114,8 @@ async function fetchAccountInfo(
       },
     },
   );
-
-  if (!res.ok) {
-    throw new Error(`MetaApi account-info ${res.status}`);
-  }
-
-  return (await res.json()) as MT5AccountInfo;
 }
+
 
 /* ── SSE helpers ─────────────────────────────────────────────────────────── */
 function sseEvent(event: string, data: unknown): string {
@@ -161,68 +167,88 @@ export const Route = createFileRoute("/api/v1/broker/stream")({
 
         const metaAccountId = payload.metaAccountId as string;
 
-        /* ── Stream account metrics every 3 seconds via SSE ─────────────── */
+        /* ── Throttled, self-halting SSE polling loop ────────────────────
+         * Sequential requests with 3–5 s randomized jitter (never a static
+         * 1 s tick), exponential backoff on transient errors, and a hard
+         * stop on any Cloudflare/WAF block so we don't deepen the IP ban.
+         */
         const encoder = new TextEncoder();
-        let intervalId: ReturnType<typeof setInterval> | null = null;
+        let stopped = false;
 
         const stream = new ReadableStream({
           async start(controller) {
-            // Send initial connected event
-            controller.enqueue(
-              encoder.encode(
-                sseEvent("connected", {
-                  message: "MT5 stream established",
-                  accountId: metaAccountId,
-                  server: payload.server,
-                  loginId: payload.sub,
-                }),
-              ),
-            );
+            const emit = (event: string, data: unknown) => {
+              if (stopped) return;
+              controller.enqueue(encoder.encode(sseEvent(event, data)));
+            };
 
-            // Poll MetaApi every 3 s and push account-info events
-            async function pushUpdate() {
+            emit("connected", {
+              message: "MT5 stream established",
+              accountId: metaAccountId,
+              server: payload.server,
+              loginId: payload.sub,
+            });
+
+            let failures = 0;
+
+            while (!stopped) {
               try {
                 const info = await fetchAccountInfo(metaToken!, metaAccountId);
-                controller.enqueue(
-                  encoder.encode(
-                    sseEvent("account-update", {
-                      timestamp: Date.now(),
-                      balance: info.balance,
-                      equity: info.equity,
-                      margin: info.margin,
-                      freeMargin: info.freeMargin,
-                      marginLevel: info.marginLevel,
-                      currency: info.currency,
-                      leverage: info.leverage,
-                      server: info.server,
-                      name: info.name,
-                    }),
-                  ),
-                );
+                failures = 0;
+                emit("account-update", {
+                  timestamp: Date.now(),
+                  balance: info.balance,
+                  equity: info.equity,
+                  margin: info.margin,
+                  freeMargin: info.freeMargin,
+                  marginLevel: info.marginLevel,
+                  currency: info.currency,
+                  leverage: info.leverage,
+                  server: info.server,
+                  name: info.name,
+                });
               } catch (err) {
-                controller.enqueue(
-                  encoder.encode(
-                    sseEvent("error", {
-                      message: "Failed to fetch account data. Retrying…",
-                      detail: err instanceof Error ? err.message : String(err),
-                    }),
-                  ),
-                );
+                if (isWafBlockedError(err)) {
+                  // Fail-safe rejection posture: halt immediately.
+                  emit("waf-blocked", {
+                    message: WAF_CLIENT_MESSAGE,
+                    action: "SWITCH_NETWORK_RENEW_IP",
+                    status: err.verdict.status,
+                    rayId: err.verdict.rayId ?? null,
+                  });
+                  stopped = true;
+                  try { controller.close(); } catch { /* already closed */ }
+                  return;
+                }
+
+                failures += 1;
+                emit("error", {
+                  message: "Failed to fetch account data. Backing off…",
+                  detail: err instanceof Error ? err.message : String(err),
+                  attempt: failures,
+                });
+
+                if (failures >= 6) {
+                  emit("error", { message: "Too many consecutive failures — stream stopped." });
+                  stopped = true;
+                  try { controller.close(); } catch { /* already closed */ }
+                  return;
+                }
+
+                await sleep(backoffDelay(failures));
+                continue;
               }
+
+              await sleep(jitteredDelay(3000, 5000));
             }
-
-            // First push immediately
-            await pushUpdate();
-
-            // Then every 3 s
-            intervalId = setInterval(pushUpdate, 3000);
           },
 
           cancel() {
-            // Client disconnected — clean up the polling interval
-            if (intervalId) clearInterval(intervalId);
+            // Client disconnected — stop the loop.
+            stopped = true;
           },
         });
+
 
         return new Response(stream, {
           status: 200,
