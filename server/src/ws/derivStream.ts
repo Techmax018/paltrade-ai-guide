@@ -13,6 +13,7 @@
 import WebSocket from "ws";
 import { query } from "../db/client";
 import { decrypt } from "../lib/auth";
+import { browserHeaders, WAF_CLIENT_HINT } from "../lib/requestController";
 import { NormalisedFrame, AccountUpdate } from "./types";
 
 const DERIV_WS = "wss://ws.derivws.com/websockets/v3";
