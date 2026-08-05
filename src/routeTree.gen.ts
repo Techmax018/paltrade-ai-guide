@@ -17,6 +17,9 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TerminalRouteImport } from './routes/terminal'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiV1AuthConnectBrokerRouteImport } from './routes/api/v1/auth/connect-broker'
+import { Route as ApiV1BrokerServersRouteImport } from './routes/api/v1/broker/servers'
+import { Route as ApiV1BrokerStreamRouteImport } from './routes/api/v1/broker/stream'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +61,21 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1AuthConnectBrokerRoute = ApiV1AuthConnectBrokerRouteImport.update({
+  id: '/api/v1/auth/connect-broker',
+  path: '/api/v1/auth/connect-broker',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1BrokerServersRoute = ApiV1BrokerServersRouteImport.update({
+  id: '/api/v1/broker/servers',
+  path: '/api/v1/broker/servers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1BrokerStreamRoute = ApiV1BrokerStreamRouteImport.update({
+  id: '/api/v1/broker/stream',
+  path: '/api/v1/broker/stream',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,6 +86,9 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terminal': typeof TerminalRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/v1/auth/connect-broker': typeof ApiV1AuthConnectBrokerRoute
+  '/api/v1/broker/servers': typeof ApiV1BrokerServersRoute
+  '/api/v1/broker/stream': typeof ApiV1BrokerStreamRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +99,9 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terminal': typeof TerminalRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/v1/auth/connect-broker': typeof ApiV1AuthConnectBrokerRoute
+  '/api/v1/broker/servers': typeof ApiV1BrokerServersRoute
+  '/api/v1/broker/stream': typeof ApiV1BrokerStreamRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +113,9 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terminal': typeof TerminalRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/v1/auth/connect-broker': typeof ApiV1AuthConnectBrokerRoute
+  '/api/v1/broker/servers': typeof ApiV1BrokerServersRoute
+  '/api/v1/broker/stream': typeof ApiV1BrokerStreamRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +128,9 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terminal'
     | '/api/chat'
+    | '/api/v1/auth/connect-broker'
+    | '/api/v1/broker/servers'
+    | '/api/v1/broker/stream'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +141,9 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terminal'
     | '/api/chat'
+    | '/api/v1/auth/connect-broker'
+    | '/api/v1/broker/servers'
+    | '/api/v1/broker/stream'
   id:
     | '__root__'
     | '/'
@@ -121,6 +154,9 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terminal'
     | '/api/chat'
+    | '/api/v1/auth/connect-broker'
+    | '/api/v1/broker/servers'
+    | '/api/v1/broker/stream'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,6 +168,9 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TerminalRoute: typeof TerminalRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiV1AuthConnectBrokerRoute: typeof ApiV1AuthConnectBrokerRoute
+  ApiV1BrokerServersRoute: typeof ApiV1BrokerServersRoute
+  ApiV1BrokerStreamRoute: typeof ApiV1BrokerStreamRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -192,6 +231,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/auth/connect-broker': {
+      id: '/api/v1/auth/connect-broker'
+      path: '/api/v1/auth/connect-broker'
+      fullPath: '/api/v1/auth/connect-broker'
+      preLoaderRoute: typeof ApiV1AuthConnectBrokerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/broker/servers': {
+      id: '/api/v1/broker/servers'
+      path: '/api/v1/broker/servers'
+      fullPath: '/api/v1/broker/servers'
+      preLoaderRoute: typeof ApiV1BrokerServersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/broker/stream': {
+      id: '/api/v1/broker/stream'
+      path: '/api/v1/broker/stream'
+      fullPath: '/api/v1/broker/stream'
+      preLoaderRoute: typeof ApiV1BrokerStreamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -204,6 +264,9 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TerminalRoute: TerminalRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiV1AuthConnectBrokerRoute: ApiV1AuthConnectBrokerRoute,
+  ApiV1BrokerServersRoute: ApiV1BrokerServersRoute,
+  ApiV1BrokerStreamRoute: ApiV1BrokerStreamRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
