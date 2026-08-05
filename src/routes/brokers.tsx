@@ -222,6 +222,7 @@ function VantageCard() {
   const [server, setServer] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [err, setErr] = useState("");
+  const [wafAlert, setWafAlert] = useState("");
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
