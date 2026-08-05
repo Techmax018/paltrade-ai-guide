@@ -370,6 +370,15 @@ function VantageCard() {
               {session.accountType} · expires {new Date(session.expiresAt).toLocaleTimeString()}
             </div>
           </div>
+          {wafAlert && (
+            <div role="alert" className="rounded-md border border-bear/40 bg-bear/10 p-3 text-xs text-bear">
+              <span className="font-semibold">Connection blocked by broker firewall.</span>{" "}
+              {wafAlert} Polling has been halted to avoid deepening the block —{" "}
+              <button onClick={() => session && openStream(session.sessionToken)} className="underline">
+                retry after switching network
+              </button>.
+            </div>
+          )}
           <LiveMetrics status={streamStatus} metrics={metrics} />
           <button onClick={disconnect}
             className="flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground hover:border-bear/50 hover:text-bear">
