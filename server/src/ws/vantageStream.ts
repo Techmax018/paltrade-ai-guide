@@ -13,6 +13,7 @@
 import MetaApi from "metaapi.cloud-sdk";
 import { WebSocket } from "ws";
 import { query } from "../db/client";
+import { startPollingLoop } from "../lib/requestController";
 import { NormalisedFrame, AccountUpdate } from "./types";
 
 function send(ws: WebSocket, frame: NormalisedFrame) {
@@ -147,7 +148,7 @@ export async function startVantageStream(
 
   /* ── 5. Cleanup function ──────────────────────────────────────────────── */
   return () => {
-    clearInterval(interval);
+    stopPolling();
     connection.close();
   };
 }
