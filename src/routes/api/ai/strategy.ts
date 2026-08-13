@@ -54,7 +54,6 @@ export const Route = createFileRoute("/api/ai/strategy")({
     handlers: {
       POST: async ({ request }) => {
         const key = process.env.LOVABLE_API_KEY;
-        if (!key) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
 
         let body: SnapshotBody;
         try {
@@ -75,53 +74,103 @@ export const Route = createFileRoute("/api/ai/strategy")({
           recentCandles: (body.recentCandles ?? []).slice(-40),
         };
 
-        const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
-          body: JSON.stringify({
-            model: "google/gemini-3.6-flash",
-            messages: [
-              {
-                role: "system",
-                content:
-                  "You are PalTrade AI, a disciplined forex & synthetic-index strategy analyst. " +
-                  "You receive a live market snapshot (indicators, structure, FVGs, fib levels, recent candles) " +
-                  "and must choose the single best-fitting strategy right now (e.g. trend continuation with EMA pullback, " +
-                  "BOS + FVG retest, range fade at support/resistance, RSI divergence reversal, breakout retest) and judge TIMING: " +
-                  "whether to take the trade now, wait for a specific trigger, or avoid. " +
-                  "Consider the UTC time vs trading sessions (Sydney/Tokyo/London/New York, London-NY overlap) — synthetic indices trade 24/7. " +
-                  "Be honest: if confluence is weak, say STAND_ASIDE / AVOID. Never promise profits. Keep every field short and concrete. " +
-                  "confidence is 0-100. checklist has 3-5 short conditions to verify before entering.",
-              },
-              {
-                role: "user",
-                content:
-                  "Market snapshot JSON:\n" +
-                  JSON.stringify(snapshot) +
-                  "\n\nReturn the best strategy and precise timing guidance.",
-              },
-            ],
-            response_format: { type: "json_schema", json_schema: SCHEMA },
-          }),
-        });
+        // If LOVABLE_API_KEY is provided, keep using Lovable gateway
+        if (key) {
+          const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
+            body: JSON.stringify({
+              model: "google/gemini-3.6-flash",
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You are PalTrade AI, a disciplined forex & synthetic-index strategy analyst. " +
+                    "You receive a live market snapshot (indicators, structure, FVGs, fib levels, recent candles) " +
+                    "and must choose the single best-fitting strategy right now (e.g. trend continuation with EMA pullback, " +
+                    "BOS + FVG retest, range fade at support/resistance, RSI divergence reversal, breakout retest) and judge TIMING: " +
+                    "whether to take the trade now, wait for a specific trigger, or avoid. " +
+                    "Consider the UTC time vs trading sessions (Sydney/Tokyo/London/New York, London-NY overlap) — synthetic indices trade 24/7. " +
+                    "Be honest: if confluence is weak, say STAND_ASIDE / AVOID. Never promise profits. Keep every field short and concrete. " +
+                    "confidence is 0-100. checklist has 3-5 short conditions to verify before entering.",
+                },
+                {
+                  role: "user",
+                  content:
+                    "Market snapshot JSON:\n" +
+                    JSON.stringify(snapshot) +
+                    "\n\nReturn the best strategy and precise timing guidance.",
+                },
+              ],
+              response_format: { type: "json_schema", json_schema: SCHEMA },
+            }),
+          });
 
-        if (!res.ok) {
-          const text = await res.text();
-          if (res.status === 429)
-            return new Response("Rate limit reached — try again shortly.", { status: 429 });
-          if (res.status === 402)
-            return new Response("AI credits exhausted — add credits to continue.", { status: 402 });
-          return new Response(text || "AI request failed", { status: res.status });
+          if (!res.ok) {
+            const text = await res.text();
+            if (res.status === 429)
+              return new Response("Rate limit reached — try again shortly.", { status: 429 });
+            if (res.status === 402)
+              return new Response("AI credits exhausted — add credits to continue.", { status: 402 });
+            return new Response(text || "AI request failed", { status: res.status });
+          }
+
+          const data = (await res.json()) as {
+            choices?: { message?: { content?: string } }[];
+          };
+          const raw = data.choices?.[0]?.message?.content ?? "";
+          try {
+            return Response.json(JSON.parse(raw));
+          } catch {
+            return new Response("AI returned an unreadable response", { status: 502 });
+          }
         }
 
-        const data = (await res.json()) as {
-          choices?: { message?: { content?: string } }[];
-        };
-        const raw = data.choices?.[0]?.message?.content ?? "";
+        // Otherwise, call Google Generative API (Gemini) directly
+        const googleModel = process.env.GOOGLE_MODEL ?? "gemini-3.6";
+        const googleToken = process.env.GOOGLE_OAUTH_TOKEN ?? process.env.GOOGLE_API_KEY;
+        if (!googleToken) return new Response("Missing AI configuration (LOVABLE_API_KEY or GOOGLE_API_KEY/GOOGLE_OAUTH_TOKEN)", { status: 500 });
+
+        const prompt = `You are PalTrade AI, a disciplined forex & synthetic-index strategy analyst.\nReturn a JSON object matching the following schema exactly (no extra text): ${JSON.stringify(
+          SCHEMA.schema,
+        )}\nSnapshot: ${JSON.stringify(snapshot)}`;
+
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (process.env.GOOGLE_OAUTH_TOKEN) headers.Authorization = `Bearer ${process.env.GOOGLE_OAUTH_TOKEN}`;
+        else headers["X-goog-api-key"] = process.env.GOOGLE_API_KEY as string;
+
+        const gres = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${googleModel}:generateContent`,
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+          },
+        );
+
+        if (!gres.ok) {
+          const t = await gres.text();
+          return new Response(t || "Google Generative API error", { status: gres.status });
+        }
+
+        const gbody = await gres.json();
+        const candidates = gbody.candidates ?? gbody.output?.candidates ?? [];
+        let text = "";
+        if (Array.isArray(candidates) && candidates.length) {
+          const c = candidates[0];
+          if (Array.isArray(c.content)) text = c.content.map((p: any) => p.text || "").join("");
+          else if (Array.isArray(c.output)) text = c.output.map((o: any) => (Array.isArray(o.content) ? o.content.map((p: any) => p.text || "").join("") : "")).join("");
+          else text = JSON.stringify(c);
+        } else {
+          text = JSON.stringify(gbody);
+        }
+
+        const match = text.match(/\{[^]*\}/);
+        if (!match) return new Response("AI returned unexpected format", { status: 502 });
         try {
-          return Response.json(JSON.parse(raw));
+          return Response.json(JSON.parse(match[0]));
         } catch {
-          return new Response("AI returned an unreadable response", { status: 502 });
+          return new Response("AI returned unreadable JSON", { status: 502 });
         }
       },
     },
