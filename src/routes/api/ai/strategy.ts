@@ -148,14 +148,56 @@ export const Route = createFileRoute("/api/ai/strategy")({
         if (process.env.GOOGLE_OAUTH_TOKEN) headers.Authorization = `Bearer ${process.env.GOOGLE_OAUTH_TOKEN}`;
         else headers["X-goog-api-key"] = process.env.GOOGLE_API_KEY as string;
 
-        const gres = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${googleModel}:generateContent`,
-          {
-            method: "POST",
-            headers,
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-          },
-        );
+        async function tryGenerate(modelName: string) {
+          const r = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`,
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+            },
+          );
+          return r;
+        }
+
+        // Try configured model first, then fallback to listing models and attempting sensible candidates
+        let gres = await tryGenerate(googleModel);
+        if (!gres.ok) {
+          const text = await gres.text();
+          const bodyText = text || "Google Generative API error";
+
+          // If model not found / unsupported, attempt to list available models and retry
+          if (gres.status === 404 || /not found|not supported/i.test(bodyText)) {
+            const listRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+              method: "GET",
+              headers,
+            });
+
+            if (listRes.ok) {
+              const listBody = await listRes.json();
+              const available: string[] = (listBody.models ?? []).map((m: any) => m.name).filter(Boolean);
+
+              // Prioritize Gemini, then Bison/text models
+              const candidates = [
+                ...new Set([
+                  ...available.filter((n) => /gemini/i.test(n)),
+                  ...available.filter((n) => /bison|text/i.test(n)),
+                ]),
+              ];
+
+              for (const candidate of candidates) {
+                gres = await tryGenerate(candidate);
+                if (gres.ok) {
+                  break;
+                }
+              }
+            } else {
+              return new Response(await listRes.text() || "Failed to list Google models", { status: listRes.status });
+            }
+          } else {
+            return new Response(bodyText, { status: gres.status });
+          }
+        }
 
         if (!gres.ok) {
           const t = await gres.text();
