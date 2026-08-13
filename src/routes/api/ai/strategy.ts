@@ -127,9 +127,18 @@ export const Route = createFileRoute("/api/ai/strategy")({
         }
 
         // Otherwise, call Google Generative API (Gemini) directly
-        const googleModel = process.env.GOOGLE_MODEL ?? "gemini-3.6";
+        const googleModel = process.env.GOOGLE_MODEL;
         const googleToken = process.env.GOOGLE_OAUTH_TOKEN ?? process.env.GOOGLE_API_KEY;
-        if (!googleToken) return new Response("Missing AI configuration (LOVABLE_API_KEY or GOOGLE_API_KEY/GOOGLE_OAUTH_TOKEN)", { status: 500 });
+        if (!googleToken)
+          return new Response(
+            "Missing AI configuration (set LOVABLE_API_KEY or GOOGLE_API_KEY/GOOGLE_OAUTH_TOKEN)",
+            { status: 500 },
+          );
+        if (!googleModel)
+          return new Response(
+            "Missing GOOGLE_MODEL environment variable — set to the model resource name (e.g. 'models/gemini-1' or 'models/text-bison-001')",
+            { status: 500 },
+          );
 
         const prompt = `You are PalTrade AI, a disciplined forex & synthetic-index strategy analyst.\nReturn a JSON object matching the following schema exactly (no extra text): ${JSON.stringify(
           SCHEMA.schema,
